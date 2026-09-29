@@ -11,7 +11,7 @@ import { emptyBounds, extendBounds } from "./math";
 import { ImageStore, renderScene } from "./render";
 import { usedFiles } from "./serialize";
 import { getPaintOps, type PaintOp } from "./shape";
-import type { BoardElement, Bounds, FileMap, FontFamily, TextAlign } from "./types";
+import type { BoardElement, Bounds, FileMap, FontFamily, ShapeElement, TextAlign } from "./types";
 
 export interface ExportOptions {
   elements: readonly BoardElement[];
@@ -160,22 +160,18 @@ export async function exportToSvg(opts: ExportOptions): Promise<string> {
       transform = `translate(${n(cx + ox)} ${n(cy + oy)})${el.angle ? ` rotate(${n((el.angle * 180) / Math.PI)})` : ""} translate(${n(-el.width / 2)} ${n(-el.height / 2)})`;
     }
     let inner = "";
+    const shapeLabel = (shape: ShapeElement) => {
+      if (!shape.label) return "";
+      families.add(shape.fontFamily);
+      const l = layoutShapeLabel(shape);
+      return textToSvg(l.lines, shape.fontFamily, shape.fontSize, shape.strokeColor, shape.textAlign, l.cx - l.width / 2, l.cy - l.height / 2, l.width);
+    };
     switch (el.type) {
-      case "rectangle":
-      case "diamond":
-      case "ellipse":
-      case "triangle":
       case "sticky": {
-        if (el.type === "sticky") {
-          hasSticky = true;
-          const r = el.edges === "round" ? Math.min(14, Math.min(el.width, el.height) * 0.08) : 2;
-          inner += `<rect width="${n(el.width)}" height="${n(el.height)}" rx="${n(r)}" fill="${el.backgroundColor === "transparent" ? "#fff3a3" : el.backgroundColor}" filter="url(#sticky-shadow)"/>`;
-        } else inner += opsToSvg(getPaintOps(el));
-        if (el.label) {
-          families.add(el.fontFamily);
-          const l = layoutShapeLabel(el);
-          inner += textToSvg(l.lines, el.fontFamily, el.fontSize, el.strokeColor, el.textAlign, l.cx - l.width / 2, l.cy - l.height / 2, l.width);
-        }
+        hasSticky = true;
+        const r = el.edges === "round" ? Math.min(14, Math.min(el.width, el.height) * 0.08) : 2;
+        inner += `<rect width="${n(el.width)}" height="${n(el.height)}" rx="${n(r)}" fill="${el.backgroundColor === "transparent" ? "#fff3a3" : el.backgroundColor}" filter="url(#sticky-shadow)"/>`;
+        inner += shapeLabel(el);
         break;
       }
       case "arrow":
@@ -210,6 +206,9 @@ export async function exportToSvg(opts: ExportOptions): Promise<string> {
         inner += `<image href="${file.dataURL}" width="${n(el.width)}" height="${n(el.height)}" preserveAspectRatio="none"${clip}/>`;
         break;
       }
+      default:
+        // Every shape type — deliberately not a list, so a new shape is never left out.
+        inner += opsToSvg(getPaintOps(el)) + shapeLabel(el);
     }
     body.push(`<g transform="${transform}"${opacity}>${inner}</g>`);
   });

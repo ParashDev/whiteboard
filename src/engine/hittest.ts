@@ -1,5 +1,5 @@
 import { freedrawSize } from "./constants";
-import { getCenter, isBindable, isLinear, layoutLinearLabel, linearPath, shapePolygon } from "./elements";
+import { getCenter, getElementBounds, isBindable, isLinear, isRoundShape, layoutLinearLabel, linearPath, shapePolygon } from "./elements";
 import { distanceToPolyline, pointInPolygon, rotatePoint } from "./math";
 import type { BoardElement, Vec } from "./types";
 
@@ -29,17 +29,6 @@ function closedPolylineDistance(px: number, py: number, poly: Vec[]): number {
 export function hitTestElement(el: BoardElement, x: number, y: number, tol: number): boolean {
   const [lx, ly] = toLocal(el, x, y);
   switch (el.type) {
-    case "rectangle":
-    case "diamond":
-    case "triangle":
-    case "ellipse": {
-      const filled = el.backgroundColor !== "transparent" || el.label.trim() !== "";
-      const strokeTol = tol + el.strokeWidth / 2;
-      if (el.type === "ellipse") return ellipseHit(el.width, el.height, lx, ly, filled, strokeTol);
-      const poly = shapePolygon(el);
-      if (filled && pointInPolygon(lx, ly, poly)) return true;
-      return closedPolylineDistance(lx, ly, poly) <= strokeTol;
-    }
     case "sticky":
     case "text":
     case "image":
@@ -55,6 +44,16 @@ export function hitTestElement(el: BoardElement, x: number, y: number, tol: numb
       const pts = el.points.map((p) => [p[0], p[1]] as Vec);
       return distanceToPolyline(lx, ly, pts) <= tol + freedrawSize(el.variant, el.strokeWidth) / 2;
     }
+    default: {
+      // Every shape type — deliberately not a list, so a new shape is always clickable.
+      // An actor is a stick figure, so it is picked by its whole box.
+      const filled = el.backgroundColor !== "transparent" || el.label.trim() !== "" || el.type === "actor";
+      const strokeTol = tol + el.strokeWidth / 2;
+      if (isRoundShape(el)) return ellipseHit(el.width, el.height, lx, ly, filled, strokeTol);
+      const poly = shapePolygon(el);
+      if (filled && pointInPolygon(lx, ly, poly)) return true;
+      return closedPolylineDistance(lx, ly, poly) <= strokeTol;
+    }
   }
 }
 
@@ -68,6 +67,11 @@ export function getElementAtPoint(
   for (let i = elements.length - 1; i >= 0; i--) {
     const el = elements[i];
     if (filter && !filter(el)) continue;
+    // Cheap reject first: the exact test walks every point of a pen stroke.
+    const b = getElementBounds(el);
+    // Arrow labels can stick out past a short arrow's own bounds.
+    const pad = tol + el.strokeWidth * 5 + 12 + (isLinear(el) && el.label ? 240 : 0);
+    if (x < b.minX - pad || x > b.maxX + pad || y < b.minY - pad || y > b.maxY + pad) continue;
     if (hitTestElement(el, x, y, tol)) return el;
   }
   return null;
@@ -83,7 +87,7 @@ export function pointInElementBox(el: BoardElement, x: number, y: number, pad: n
 export function isOverBindable(el: BoardElement, x: number, y: number, tol: number): boolean {
   if (!isBindable(el)) return false;
   const [lx, ly] = toLocal(el, x, y);
-  if (el.type === "ellipse") return ellipseHit(el.width, el.height, lx, ly, true, tol);
+  if (isRoundShape(el)) return ellipseHit(el.width, el.height, lx, ly, true, tol);
   const poly = shapePolygon(el);
   return pointInPolygon(lx, ly, poly) || closedPolylineDistance(lx, ly, poly) <= tol;
 }

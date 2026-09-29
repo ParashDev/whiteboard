@@ -5,7 +5,25 @@
 
 export type Vec = [number, number];
 
-export type ShapeType = "rectangle" | "diamond" | "ellipse" | "triangle";
+export type ShapeType =
+  | "rectangle"
+  | "diamond"
+  | "ellipse"
+  | "triangle"
+  | "parallelogram"
+  | "hexagon"
+  | "star"
+  | "cylinder"
+  | "cloud"
+  | "bubble"
+  | "terminator"
+  | "document"
+  | "subroutine"
+  | "manualinput"
+  | "trapezoid"
+  | "delay"
+  | "offpage"
+  | "actor";
 export type LinearType = "arrow" | "line";
 export type ElementType = ShapeType | "sticky" | LinearType | "draw" | "text" | "image";
 

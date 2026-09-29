@@ -2,7 +2,7 @@
 // sloppiness, arrowheads…). 20×20, currentColor, same 1.75 stroke as the
 // lucide icons beside them.
 
-import type { SVGProps } from "react";
+import type { ReactNode, SVGProps } from "react";
 import type { Arrowhead } from "../../engine/types";
 
 type P = SVGProps<SVGSVGElement>;
@@ -88,6 +88,39 @@ export const PatternIcon = ({ kind, ...p }: P & { kind: "plain" | "dots" | "grid
     {kind === "dots" && <path d="M7 7h.01M10 7h.01M13 7h.01M7 10h.01M10 10h.01M13 10h.01M7 13h.01M10 13h.01M13 13h.01" strokeWidth={2} />}
     {kind === "grid" && <path d="M8 3.5v13M12 3.5v13M3.5 8h13M3.5 12h13" strokeWidth={1.1} />}
   </svg>
+);
+
+/** Toolbar-sized shape icons for symbols lucide doesn't draw, on its 24-unit grid. */
+function shapeIcon(body: ReactNode, name: string) {
+  const Icon = ({ size = 24, strokeWidth = 2 }: { size?: number; strokeWidth?: number }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      {body}
+    </svg>
+  );
+  Icon.displayName = name;
+  return Icon;
+}
+
+export const ParallelogramIcon = shapeIcon(<path d="M7.5 5h13.5l-4.5 14H3z" />, "ParallelogramIcon");
+export const TerminatorIcon = shapeIcon(<rect x="2.5" y="7" width="19" height="10" rx="5" />, "TerminatorIcon");
+export const DocumentShapeIcon = shapeIcon(<path d="M4 4h16v12.5c-4-2.5-7 4.5-11.5 2-1.6-.9-3-.8-4.5.1z" />, "DocumentShapeIcon");
+export const SubroutineIcon = shapeIcon(
+  <>
+    <rect x="3" y="6" width="18" height="12" rx="1" />
+    <path d="M6.5 6v12M17.5 6v12" />
+  </>,
+  "SubroutineIcon",
+);
+export const ManualInputIcon = shapeIcon(<path d="M3 10.5 21 5v14H3z" />, "ManualInputIcon");
+export const TrapezoidIcon = shapeIcon(<path d="M3 6h18l-3.5 12h-11z" />, "TrapezoidIcon");
+export const DelayIcon = shapeIcon(<path d="M4 5h9a7 7 0 0 1 0 14H4z" />, "DelayIcon");
+export const OffPageIcon = shapeIcon(<path d="M5 3.5h14v10.5l-7 6.5-7-6.5z" />, "OffPageIcon");
+export const ActorIcon = shapeIcon(
+  <>
+    <circle cx="12" cy="5" r="2.5" />
+    <path d="M12 7.5v7.5M6 11h12M7.5 21l4.5-6 4.5 6" />
+  </>,
+  "ActorIcon",
 );
 
 /** The whiteboard mark: a teal tile with a marker stroke across it. */

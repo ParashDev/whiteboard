@@ -74,7 +74,10 @@
       <div class="wrap article-grid">
         <article class="prose">
           <h2 id="symbols">Flowchart symbols and what they mean</h2>
-          <p>A handful of shapes covers almost every flowchart. Each one is a single key away:</p>
+          <p>
+            Every standard flowchart symbol is in the Shapes menu, under Flowchart &amp; diagrams — the common ones are also a
+            single key away:
+          </p>
           <div class="table-wrap">
             <table class="spec stack">
               <thead>
@@ -86,9 +89,9 @@
               </thead>
               <tbody>
                 <tr>
-                  <td>Oval</td>
-                  <td data-label="Meaning">Start or end of the process (the terminator)</td>
-                  <td data-label="Tool">Ellipse — <kbd>O</kbd></td>
+                  <td>Terminator (pill)</td>
+                  <td data-label="Meaning">Start or end of the process</td>
+                  <td data-label="Tool">Start / end — or Ellipse <kbd>O</kbd></td>
                 </tr>
                 <tr>
                   <td>Rectangle</td>
@@ -99,6 +102,56 @@
                   <td>Diamond</td>
                   <td data-label="Meaning">A decision with two or more branches</td>
                   <td data-label="Tool">Diamond — <kbd>D</kbd></td>
+                </tr>
+                <tr>
+                  <td>Parallelogram</td>
+                  <td data-label="Meaning">Input or output — data coming in or going out</td>
+                  <td data-label="Tool">Data (input/output)</td>
+                </tr>
+                <tr>
+                  <td>Document</td>
+                  <td data-label="Meaning">A document or report the process produces or reads</td>
+                  <td data-label="Tool">Document</td>
+                </tr>
+                <tr>
+                  <td>Rectangle with side bars</td>
+                  <td data-label="Meaning">A predefined process — a subroutine charted somewhere else</td>
+                  <td data-label="Tool">Predefined process</td>
+                </tr>
+                <tr>
+                  <td>Slanted-top box</td>
+                  <td data-label="Meaning">Manual input — someone types or enters data</td>
+                  <td data-label="Tool">Manual input</td>
+                </tr>
+                <tr>
+                  <td>Trapezoid</td>
+                  <td data-label="Meaning">A manual operation done by a person, not a system</td>
+                  <td data-label="Tool">Manual operation</td>
+                </tr>
+                <tr>
+                  <td>Hexagon</td>
+                  <td data-label="Meaning">Preparation — setting something up before the next step</td>
+                  <td data-label="Tool">Hexagon</td>
+                </tr>
+                <tr>
+                  <td>D shape</td>
+                  <td data-label="Meaning">A delay or wait</td>
+                  <td data-label="Tool">Delay</td>
+                </tr>
+                <tr>
+                  <td>Cylinder</td>
+                  <td data-label="Meaning">A database or other stored data</td>
+                  <td data-label="Tool">Database</td>
+                </tr>
+                <tr>
+                  <td>Pentagon pointing down</td>
+                  <td data-label="Meaning">An off-page connector — the flow continues on another page</td>
+                  <td data-label="Tool">Off-page link</td>
+                </tr>
+                <tr>
+                  <td>Small circle</td>
+                  <td data-label="Meaning">An on-page connector joining two parts of the chart</td>
+                  <td data-label="Tool">Ellipse — <kbd>O</kbd></td>
                 </tr>
                 <tr>
                   <td>Arrow</td>
@@ -113,7 +166,13 @@
               </tbody>
             </table>
           </div>
-          <p class="note">Input/output parallelograms and document shapes aren't built in — a labelled rectangle does the same job in most charts.</p>
+          <h2 id="system-diagrams">Shapes for system and architecture diagrams</h2>
+          <p>
+            The same canvas works for system diagrams: a <strong>Database</strong> cylinder for data stores, a
+            <strong>Cloud</strong> for external services or the internet, rectangles for servers and apps, an
+            <strong>Actor</strong> stick figure (with the name underneath) for users and roles, and speech bubbles for
+            notes. Arrows attach to every one of them, so the diagram stays connected as you rearrange it.
+          </p>
 
           <h2 id="arrows">Connect shapes with arrows that stay attached</h2>
           <p>
@@ -201,6 +260,7 @@
         <nav class="toc" aria-label="On this page">
           <p>On this page</p>
           <a href="#symbols">Flowchart symbols</a>
+          <a href="#system-diagrams">System diagrams</a>
           <a href="#arrows">Connecting arrows</a>
           <a href="#labels">Labels</a>
           <a href="#style">Neat or sketchy</a>

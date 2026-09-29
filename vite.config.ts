@@ -19,7 +19,7 @@ export default defineConfig({
         manualChunks(id) {
           const path = id.replace(/\\/g, "/");
           if (/node_modules\/(roughjs|perfect-freehand)\//.test(path)) return "engine";
-          if (/src\/engine\/(render|shape|elements|text|math|constants|templates|binding|hittest)\.ts$/.test(path)) return "engine";
+          if (/src\/engine\/(render|preview|shape|elements|text|math|constants|templates|binding|hittest)\.ts$/.test(path)) return "engine";
           return undefined;
         },
       },

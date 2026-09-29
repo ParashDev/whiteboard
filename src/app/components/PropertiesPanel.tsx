@@ -152,8 +152,9 @@ function ColorRow({ palette, value, field }: { palette: ColorPalette; value: str
   const colors = PALETTES[palette];
   const custom = value && value !== "transparent" ? value : "#1e1e1e";
   const inPalette = value !== undefined && colors.includes(value);
+  // 6 swatches × 26px + divider + 6 gaps × 5px = 191px — fits the panel even beside a classic scrollbar.
   return (
-    <div className="flex items-center gap-1.5">
+    <div className="flex items-center gap-[5px]">
       {colors.map((c) => (
         <button
           key={c}
@@ -163,18 +164,18 @@ function ColorRow({ palette, value, field }: { palette: ColorPalette; value: str
           aria-pressed={value === c}
           onClick={() => editor.updateStyle({ [field]: c })}
           className={cx(
-            "focus-ring size-7 shrink-0 rounded-md ring-1 ring-black/10 ring-inset transition-[box-shadow] duration-100",
+            "focus-ring size-[26px] shrink-0 rounded-md ring-1 ring-black/10 ring-inset transition-[box-shadow] duration-100",
             c === "transparent" && "checker",
             value === c && "outline-2 outline-offset-2 outline-accent",
           )}
           style={c === "transparent" ? undefined : { backgroundColor: c }}
         />
       ))}
-      <span className="mx-0.5 h-6 w-px bg-line" aria-hidden />
+      <span className="h-6 w-px shrink-0 bg-line" aria-hidden />
       <label
         title="Custom colour"
         className={cx(
-          "focus-within:outline-accent relative size-7 shrink-0 cursor-pointer rounded-md ring-1 ring-black/10 ring-inset focus-within:outline-2 focus-within:outline-offset-2",
+          "focus-within:outline-accent relative size-[26px] shrink-0 cursor-pointer rounded-md ring-1 ring-black/10 ring-inset focus-within:outline-2 focus-within:outline-offset-2",
           value !== undefined && !inPalette && "outline-2 outline-offset-2 outline-accent",
         )}
         style={{ backgroundColor: custom }}
@@ -522,10 +523,10 @@ export const PropertiesPanel = memo(function PropertiesPanel({ open, onClose }: 
         if ((e.target as HTMLElement).closest("button")) e.preventDefault();
       }}
       className={cx(
-        "thin-scroll pointer-events-auto z-10 flex flex-col gap-4 overflow-y-auto rounded-xl bg-island p-3.5 shadow-island",
+        "thin-scroll pointer-events-auto z-10 flex flex-col gap-4 overflow-x-hidden overflow-y-auto rounded-xl bg-island p-3.5 shadow-island",
         compact
           ? "pop-in fixed right-2 bottom-[calc(66px+env(safe-area-inset-bottom))] left-2 max-h-[46dvh]"
-          : "absolute top-[68px] left-3 max-h-[calc(100dvh-150px)] w-[226px]",
+          : "absolute top-[68px] left-3 max-h-[calc(100dvh-150px)] w-[240px]",
       )}
     >
       {compact && (

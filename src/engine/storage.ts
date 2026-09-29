@@ -47,6 +47,34 @@ export async function saveBoard(board: SavedBoard): Promise<void> {
   await (await db()).put(STORE, board, KEY);
 }
 
+// ─── Viewport ───────────────────────────────────────────────────────────────
+// Kept apart from the board so panning never rewrites the whole board.
+
+const VIEWPORT_KEY = "whiteboard:viewport:v1";
+
+export function saveViewport(v: Viewport): void {
+  try {
+    localStorage.setItem(VIEWPORT_KEY, JSON.stringify({ x: v.x, y: v.y, zoom: v.zoom }));
+  } catch {
+    // Storage blocked: the view simply isn't remembered.
+  }
+}
+
+export function loadViewport(): Viewport | undefined {
+  try {
+    const raw = localStorage.getItem(VIEWPORT_KEY);
+    if (!raw) return undefined;
+    const v: unknown = JSON.parse(raw);
+    if (typeof v !== "object" || v === null) return undefined;
+    const { x, y, zoom } = v as Record<string, unknown>;
+    return typeof x === "number" && typeof y === "number" && typeof zoom === "number" && zoom > 0 && Number.isFinite(x + y + zoom)
+      ? { x, y, zoom }
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 // ─── Preferences ────────────────────────────────────────────────────────────
 
 const PREFS_KEY = "whiteboard:prefs:v1";

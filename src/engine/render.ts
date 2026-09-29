@@ -97,13 +97,33 @@ export function renderScene(ctx: CanvasRenderingContext2D, elements: readonly Bo
   for (const el of elements) {
     if (opts.hiddenIds?.has(el.id)) continue;
     if (!boundsIntersect(getElementBounds(el, 40 + el.strokeWidth), view)) continue;
-    renderElement(ctx, el, opts);
+    try {
+      renderElement(ctx, el, opts);
+    } catch (err) {
+      // One element that can't be drawn must never blank the rest of the board.
+      reportOnce(el.id, err);
+    }
   }
   ctx.restore();
 }
 
+const reported = new Set<string>();
+function reportOnce(id: string, err: unknown): void {
+  if (reported.has(id)) return;
+  reported.add(id);
+  console.error(`Whiteboard: skipped an element that could not be drawn (${id}).`, err);
+}
+
 export function renderElement(ctx: CanvasRenderingContext2D, el: BoardElement, opts: SceneRenderOptions): void {
   ctx.save();
+  try {
+    drawElement(ctx, el, opts);
+  } finally {
+    ctx.restore();
+  }
+}
+
+function drawElement(ctx: CanvasRenderingContext2D, el: BoardElement, opts: SceneRenderOptions): void {
   ctx.globalAlpha = (el.opacity / 100) * (opts.fadedIds?.has(el.id) ? 0.2 : 1);
   if (isLinear(el)) {
     ctx.translate(el.x, el.y);
@@ -116,15 +136,8 @@ export function renderElement(ctx: CanvasRenderingContext2D, el: BoardElement, o
 
   const showLabel = !opts.hiddenLabelIds?.has(el.id);
   switch (el.type) {
-    case "rectangle":
-    case "diamond":
-    case "ellipse":
-    case "triangle":
-      paintOps(ctx, getPaintOps(el));
-      if (showLabel) drawShapeLabel(ctx, el);
-      break;
     case "sticky":
-      drawSticky(ctx, el, opts.pixelRatio * opts.viewport.zoom);
+      drawSticky(ctx, el);
       if (showLabel) drawShapeLabel(ctx, el);
       break;
     case "arrow":
@@ -149,8 +162,11 @@ export function renderElement(ctx: CanvasRenderingContext2D, el: BoardElement, o
     case "image":
       drawImage(ctx, el, opts);
       break;
+    default:
+      // Every shape type — deliberately not a list, so a new shape can never be skipped.
+      paintOps(ctx, getPaintOps(el));
+      if (showLabel) drawShapeLabel(ctx, el);
   }
-  ctx.restore();
 }
 
 export function paintOps(ctx: CanvasRenderingContext2D, ops: readonly PaintOp[]): void {
@@ -196,17 +212,27 @@ function drawShapeLabel(ctx: CanvasRenderingContext2D, el: ShapeElement): void {
   drawTextLines(ctx, l.lines, el.fontFamily, el.fontSize, el.strokeColor, el.textAlign, l.cx - l.width / 2, l.cy - l.height / 2, l.width);
 }
 
-function drawSticky(ctx: CanvasRenderingContext2D, el: ShapeElement, deviceScale: number): void {
+/**
+ * A note on paper: two flat offset layers stand in for a soft shadow. Canvas
+ * shadowBlur is re-blurred on every frame for every note and made dragging stutter.
+ */
+function drawSticky(ctx: CanvasRenderingContext2D, el: ShapeElement): void {
   const r = el.edges === "round" ? Math.min(14, Math.min(el.width, el.height) * 0.08) : 2;
-  ctx.save();
-  ctx.shadowColor = "rgba(15, 23, 42, 0.16)";
-  ctx.shadowBlur = 14 * deviceScale;
-  ctx.shadowOffsetY = 5 * deviceScale;
+  const alpha = ctx.globalAlpha;
+  ctx.fillStyle = "#0f172a";
+  ctx.globalAlpha = alpha * 0.05;
+  ctx.beginPath();
+  ctx.roundRect(1, 6, el.width - 2, el.height, r + 2);
+  ctx.fill();
+  ctx.globalAlpha = alpha * 0.08;
+  ctx.beginPath();
+  ctx.roundRect(0.5, 2, el.width - 1, el.height, r + 1);
+  ctx.fill();
+  ctx.globalAlpha = alpha;
   ctx.fillStyle = el.backgroundColor === "transparent" ? "#fff3a3" : el.backgroundColor;
   ctx.beginPath();
   ctx.roundRect(0, 0, el.width, el.height, r);
   ctx.fill();
-  ctx.restore();
 }
 
 function drawImage(ctx: CanvasRenderingContext2D, el: ImageElement, opts: SceneRenderOptions): void {

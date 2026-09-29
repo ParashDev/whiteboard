@@ -7,6 +7,29 @@ import { IconButton, Kbd, Popover, cx } from "./ui";
 
 const ICON = { size: 19, strokeWidth: 1.75 } as const;
 
+function MenuTool({ tool, selected, onPick }: { tool: Tool; selected: boolean; onPick: (t: Tool) => void }) {
+  const info = TOOLS[tool];
+  const I = info.icon;
+  return (
+    <button
+      type="button"
+      role="menuitemradio"
+      aria-checked={selected}
+      onClick={() => onPick(tool)}
+      className={cx(
+        "focus-ring flex h-10 min-w-0 items-center gap-2.5 rounded-lg border px-2.5 text-left text-[13.5px]",
+        selected ? "border-active-line bg-active text-active-ink" : "border-transparent hover:bg-hover",
+      )}
+    >
+      <span className="shrink-0">
+        <I {...ICON} />
+      </span>
+      <span className="min-w-0 flex-1 truncate">{info.label}</span>
+      {info.key && <Kbd>{info.key}</Kbd>}
+    </button>
+  );
+}
+
 function FamilyButton({ slot, compact }: { slot: Extract<Slot, { kind: "family" }>; compact: boolean }) {
   const editor = useEditor();
   const tool = useEditorState((s) => s.tool);
@@ -45,31 +68,35 @@ function FamilyButton({ slot, compact }: { slot: Extract<Slot, { kind: "family" 
           <path d="M5 0v5H0z" fill="currentColor" />
         </svg>
       </IconButton>
-      <Popover anchor={ref} open={open} onClose={close} placement={compact ? "top" : "bottom"} label={slot.label} className="p-1.5">
-        <div role="menu" className="flex min-w-[196px] flex-col">
-          {slot.tools.map((t) => {
-            const info = TOOLS[t];
-            const I = info.icon;
-            const selected = tool === t;
-            return (
-              <button
-                key={t}
-                type="button"
-                role="menuitemradio"
-                aria-checked={selected}
-                onClick={() => pick(t)}
-                className={cx(
-                  "focus-ring flex h-10 items-center gap-3 rounded-lg border px-2.5 text-left text-[13.5px]",
-                  selected ? "border-active-line bg-active text-active-ink" : "border-transparent hover:bg-hover",
-                )}
-              >
-                <I {...ICON} />
-                <span className="flex-1">{info.label}</span>
-                {info.key && <Kbd>{info.key}</Kbd>}
-              </button>
-            );
-          })}
-        </div>
+      <Popover
+        anchor={ref}
+        open={open}
+        onClose={close}
+        placement={compact ? "top" : "bottom"}
+        label={slot.label}
+        className="thin-scroll max-h-[72dvh] overflow-y-auto p-1.5"
+      >
+        {slot.groups ? (
+          // The shapes: two labelled sections, two columns each, so 18 shapes stay scannable.
+          <div role="menu" className="flex w-[392px] max-w-[calc(100vw-24px)] flex-col gap-2">
+            {slot.groups.map((g) => (
+              <div key={g.label} role="group" aria-label={g.label}>
+                <div className="px-2.5 pt-1.5 pb-1 text-[11.5px] font-medium text-muted">{g.label}</div>
+                <div className="grid grid-cols-2 gap-0.5">
+                  {g.tools.map((t) => (
+                    <MenuTool key={t} tool={t} selected={tool === t} onPick={pick} />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div role="menu" className="flex min-w-[196px] flex-col">
+            {slot.tools.map((t) => (
+              <MenuTool key={t} tool={t} selected={tool === t} onPick={pick} />
+            ))}
+          </div>
+        )}
       </Popover>
     </>
   );

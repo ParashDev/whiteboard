@@ -4,7 +4,7 @@
 // the same size at every zoom level.
 
 import { LASER_COLOR, SELECTION_COLOR } from "./constants";
-import { getCenter, isLinear, linearWorldPoints, shapePolygon } from "./elements";
+import { getCenter, isLinear, isRoundShape, isShape, linearWorldPoints, shapePolygon } from "./elements";
 import { rotatePoint } from "./math";
 import { paintOps, type SceneRenderOptions } from "./render";
 import { getPaintOps } from "./shape";
@@ -25,6 +25,8 @@ export interface OverlayState {
   linearEdit: LinearElement | null;
   marquee: Bounds | null;
   bindTarget: BoardElement | null;
+  /** Element under the pointer that a click would select. */
+  hover: BoardElement | null;
   drawing: DrawElement | null;
   laserTrails: readonly TrailPoint[][];
   eraserTrail: readonly TrailPoint[];
@@ -41,7 +43,7 @@ function screen(v: Viewport, x: number, y: number): Vec {
 function outlinePath(ctx: CanvasRenderingContext2D, el: BoardElement, v: Viewport, pad: number): void {
   const [cx, cy] = getCenter(el);
   ctx.beginPath();
-  if (el.type === "ellipse") {
+  if (isRoundShape(el)) {
     const [sx, sy] = screen(v, cx, cy);
     ctx.ellipse(sx, sy, (el.width / 2) * v.zoom + pad, (el.height / 2) * v.zoom + pad, el.angle, 0, Math.PI * 2);
     return;
@@ -77,6 +79,24 @@ function boxPath(ctx: CanvasRenderingContext2D, box: TransformBox, v: Viewport, 
   ctx.closePath();
 }
 
+/** A thin outline that follows the element: its polyline for arrows and lines, its box otherwise. */
+function elementOutline(ctx: CanvasRenderingContext2D, el: BoardElement, v: Viewport, pad: number): void {
+  if (isLinear(el)) {
+    ctx.beginPath();
+    linearWorldPoints(el).forEach(([x, y], i) => {
+      const [sx, sy] = screen(v, x, y);
+      if (i === 0) ctx.moveTo(sx, sy);
+      else ctx.lineTo(sx, sy);
+    });
+    return;
+  }
+  if (isShape(el) && el.type !== "sticky") {
+    outlinePath(ctx, el, v, pad);
+    return;
+  }
+  boxPath(ctx, { x: el.x, y: el.y, width: el.width, height: el.height, angle: el.angle }, v, pad);
+}
+
 export function renderOverlay(ctx: CanvasRenderingContext2D, o: OverlayState, scene: SceneRenderOptions): void {
   const v = scene.viewport;
   const s = scene.pixelRatio;
@@ -105,26 +125,22 @@ export function renderOverlay(ctx: CanvasRenderingContext2D, o: OverlayState, sc
     ctx.restore();
   }
 
-  const multi = o.selected.length > 1;
-  if (multi) {
+  if (o.hover) {
+    ctx.save();
+    ctx.globalAlpha = 0.45;
+    ctx.lineWidth = 1.5;
+    elementOutline(ctx, o.hover, v, 3);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  if (o.selected.length > 1) {
     ctx.save();
     ctx.lineWidth = 1;
-    ctx.setLineDash([4, 3]);
-    ctx.globalAlpha = 0.7;
+    ctx.globalAlpha = 0.5;
     for (const el of o.selected) {
-      if (isLinear(el)) {
-        const pts = linearWorldPoints(el);
-        ctx.beginPath();
-        pts.forEach(([x, y], i) => {
-          const [sx, sy] = screen(v, x, y);
-          if (i === 0) ctx.moveTo(sx, sy);
-          else ctx.lineTo(sx, sy);
-        });
-        ctx.stroke();
-      } else {
-        boxPath(ctx, { x: el.x, y: el.y, width: el.width, height: el.height, angle: el.angle }, v, 3);
-        ctx.stroke();
-      }
+      elementOutline(ctx, el, v, 3);
+      ctx.stroke();
     }
     ctx.restore();
   }

@@ -4,7 +4,7 @@
 // arrow along and keeps it pointing at the shape.
 
 import { BINDING_GAP } from "./constants";
-import { getCenter, isBindable, isLinear, linearWorldPoints, normalizeLinear, shapePolygon } from "./elements";
+import { getCenter, isBindable, isLinear, isRoundShape, linearWorldPoints, normalizeLinear, shapePolygon } from "./elements";
 import { isOverBindable } from "./hittest";
 import { rotatePoint } from "./math";
 import type { BoardElement, LinearElement, Vec } from "./types";
@@ -33,7 +33,7 @@ export function outlinePointToward(el: BoardElement, towardX: number, towardY: n
   const len = Math.hypot(dx, dy);
   if (len < 1e-6) return null;
   let t: number;
-  if (el.type === "ellipse") {
+  if (isRoundShape(el)) {
     const a = Math.max(el.width / 2, 0.5);
     const b = Math.max(el.height / 2, 0.5);
     t = 1 / Math.sqrt((dx * dx) / (a * a) + (dy * dy) / (b * b));

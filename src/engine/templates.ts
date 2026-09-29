@@ -7,7 +7,9 @@ import { applyBindings } from "./binding";
 import { fitShapeToLabel, getCenter, newDraw, newLinear, newShape, newText, normalizeDraw } from "./elements";
 import type { BoardElement, LinearElement, ShapeElement, ShapeType, StyleProps, TextElement, Vec } from "./types";
 
-export type TemplateId = "flowchart" | "mindmap" | "kanban" | "lesson";
+export type TemplateId = "flowchart" | "mindmap" | "kanban" | "lesson" | "swot" | "retro" | "timeline" | "wireframe";
+
+const STROKE = { green: "#2f9e44", red: "#e03131", blue: "#1971c2", orange: "#f08c00", grey: "#adb5bd" };
 
 class Builder {
   readonly elements: BoardElement[] = [];
@@ -145,6 +147,156 @@ function lesson(): BoardElement[] {
   return b.elements;
 }
 
+function swot(): BoardElement[] {
+  const b = new Builder();
+  b.text(0, 0, "SWOT analysis", { fontSize: 36 });
+  const quadrants: [string, string, string, [string, string], number, number][] = [
+    ["Strengths", STROKE.green, STICKY_COLORS[2], ["Loyal customers", "Fast shipping"], 0, 70],
+    ["Weaknesses", STROKE.red, STICKY_COLORS[1], ["Small team", "Slow website"], 360, 70],
+    ["Opportunities", STROKE.blue, STICKY_COLORS[3], ["A new city market", "Partnerships"], 0, 350],
+    ["Threats", STROKE.orange, STICKY_COLORS[4], ["Rising costs", "A new competitor"], 360, 350],
+  ];
+  for (const [title, stroke, note, [a, c], x, y] of quadrants) {
+    b.shape("rectangle", x, y, 340, 260, "", { strokeColor: stroke, strokeWidth: 2 });
+    b.text(x + 20, y + 14, title, { fontSize: 28, strokeColor: stroke });
+    b.sticky(x + 20, y + 80, a, note, -0.02, 140, 110);
+    b.sticky(x + 180, y + 84, c, note, 0.025, 140, 110);
+  }
+  return b.elements;
+}
+
+function retro(): BoardElement[] {
+  const b = new Builder();
+  b.text(0, 0, "Sprint retrospective", { fontSize: 36 });
+  const columns: [string, string, string, [string, number][]][] = [
+    ["Went well", STROKE.green, STICKY_COLORS[2], [["Shipped the new checkout", 2], ["Great pairing sessions", 0]]],
+    ["To improve", STROKE.red, STICKY_COLORS[1], [["Too many meetings", 3], ["Flaky tests", 1]]],
+    ["Action items", STROKE.blue, STICKY_COLORS[3], [["Keep stand-ups to 10 minutes", 0], ["Fix the three flakiest tests", 0]]],
+  ];
+  columns.forEach(([title, stroke, note, cards], i) => {
+    const x = i * 290;
+    b.text(x + 4, 66, title, { fontFamily: "sans", fontSize: 24, strokeColor: stroke });
+    b.shape("rectangle", x, 110, 260, 400, "", { strokeWidth: 1, roughness: 0, strokeColor: STROKE.grey });
+    cards.forEach(([label, votes], j) => {
+      const y = 136 + j * 170;
+      b.sticky(x + 25, y, label, note, (j % 2 ? 1 : -1) * 0.015, 210, 124);
+      // Dot votes along the note's bottom edge.
+      for (let v = 0; v < votes; v++) {
+        b.shape("ellipse", x + 190 - v * 20, y + 132, 14, 14, "", {
+          backgroundColor: STROKE.red,
+          strokeColor: STROKE.red,
+          roughness: 0,
+          strokeWidth: 1,
+        });
+      }
+    });
+  });
+  return b.elements;
+}
+
+function timeline(): BoardElement[] {
+  const b = new Builder();
+  b.text(0, 0, "Launch roadmap", { fontSize: 36 });
+  const lineY = 290;
+  b.polyline(
+    [
+      [0, lineY],
+      [1000, lineY],
+    ],
+    { strokeWidth: 2, endArrowhead: "arrow" },
+  );
+  const milestones: [string, string, string][] = [
+    ["January", "Research and customer interviews", STICKY_COLORS[3]],
+    ["March", "Design the prototype", STICKY_COLORS[5]],
+    ["May", "Private beta with 50 users", STICKY_COLORS[0]],
+    ["July", "Public launch", STICKY_COLORS[2]],
+  ];
+  milestones.forEach(([month, label, color], i) => {
+    const cx = 110 + i * 250;
+    const below = i % 2 === 0;
+    const dot = b.shape("ellipse", cx - 12, lineY - 12, 24, 24, "", {
+      backgroundColor: STROKE.blue,
+      strokeColor: STROKE.blue,
+      roughness: 0,
+    });
+    const note = b.sticky(cx - 90, below ? lineY + 70 : lineY - 70 - 116, label, color, (below ? -1 : 1) * 0.02, 180, 116);
+    b.connect(dot, note, { line: true, style: { strokeColor: STROKE.grey, strokeWidth: 1 } });
+    b.text(cx - 40, below ? lineY - 52 : lineY + 22, month, { fontFamily: "sans", fontSize: 20, strokeColor: "#495057" });
+  });
+  return b.elements;
+}
+
+function wireframe(): BoardElement[] {
+  const b = new Builder();
+  const muted = { strokeColor: STROKE.grey, strokeWidth: 2 };
+  // Browser window.
+  b.shape("rectangle", 0, 0, 640, 540, "", { strokeWidth: 2 });
+  b.polyline(
+    [
+      [0, 40],
+      [640, 40],
+    ],
+    { strokeWidth: 2 },
+  );
+  for (let i = 0; i < 3; i++) b.shape("ellipse", 16 + i * 20, 14, 11, 11, "", { strokeWidth: 1.5, roughness: 0 });
+  // Navigation.
+  b.shape("rectangle", 24, 60, 96, 34, "Logo", { fontSize: 16, edges: "sharp" });
+  b.text(372, 66, "Features   Pricing   Contact", { fontFamily: "sans", fontSize: 16 });
+  // Hero: headline, text lines, button, image placeholder.
+  b.text(24, 128, "Big headline here", { fontSize: 32 });
+  for (const [y, len] of [
+    [194, 270],
+    [216, 220],
+  ]) {
+    b.polyline(
+      [
+        [26, y],
+        [26 + len, y],
+      ],
+      muted,
+    );
+  }
+  const button = b.shape("rectangle", 24, 244, 140, 44, "Sign up", { backgroundColor: BLUE, fontSize: 18 });
+  b.shape("rectangle", 340, 120, 272, 176, "", { strokeWidth: 1.5 });
+  b.polyline(
+    [
+      [340, 120],
+      [612, 296],
+    ],
+    muted,
+  );
+  b.polyline(
+    [
+      [612, 120],
+      [340, 296],
+    ],
+    muted,
+  );
+  // Three feature cards.
+  for (let i = 0; i < 3; i++) {
+    const x = 24 + i * 204;
+    b.shape("rectangle", x, 330, 184, 150, "", { strokeWidth: 1.5 });
+    b.shape("ellipse", x + 16, 346, 36, 36, "", { strokeWidth: 1.5 });
+    for (const [y, len] of [
+      [404, 140],
+      [428, 110],
+    ]) {
+      b.polyline(
+        [
+          [x + 16, y],
+          [x + 16 + len, y],
+        ],
+        muted,
+      );
+    }
+  }
+  b.text(24, 500, "© 2026 Company", { fontFamily: "sans", fontSize: 14, strokeColor: "#868e96" });
+  // A review comment pinned beside the page.
+  const comment = b.sticky(700, 190, "Make the sign-up button stand out more", STICKY_COLORS[1], 0.03, 190, 130);
+  b.connect(comment, button, { curved: true, via: [[520, 330]], style: { strokeColor: STROKE.red } });
+  return b.elements;
+}
+
 /** The composition shown in the landing page's hero picture. */
 function hero(): BoardElement[] {
   const b = new Builder();
@@ -163,11 +315,15 @@ function hero(): BoardElement[] {
   return b.elements;
 }
 
-export const TEMPLATES: { id: TemplateId; name: string; build: () => BoardElement[] }[] = [
-  { id: "flowchart", name: "Flowchart", build: flowchart },
-  { id: "mindmap", name: "Mind map", build: mindmap },
-  { id: "kanban", name: "Kanban board", build: kanban },
-  { id: "lesson", name: "Math lesson", build: lesson },
+export const TEMPLATES: { id: TemplateId; name: string; description: string; build: () => BoardElement[] }[] = [
+  { id: "flowchart", name: "Flowchart", description: "Steps, a decision and a loop back", build: flowchart },
+  { id: "mindmap", name: "Mind map", description: "One topic, six ideas on sticky notes", build: mindmap },
+  { id: "kanban", name: "Kanban board", description: "To do, in progress and done", build: kanban },
+  { id: "lesson", name: "Math lesson", description: "Handwriting, a diagram and homework", build: lesson },
+  { id: "swot", name: "SWOT analysis", description: "Strengths, weaknesses, opportunities, threats", build: swot },
+  { id: "retro", name: "Sprint retrospective", description: "Went well, to improve, action items", build: retro },
+  { id: "timeline", name: "Project timeline", description: "A roadmap with four milestones", build: timeline },
+  { id: "wireframe", name: "Website wireframe", description: "A landing page layout with a review note", build: wireframe },
 ];
 
 export function buildScene(id: TemplateId | "hero"): BoardElement[] {

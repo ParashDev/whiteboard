@@ -21,8 +21,9 @@ import {
   getElementBounds,
   isLinear,
   isShape,
-  labelArea,
+  isShapeType,
   layoutLinearLabel,
+  layoutShapeLabel,
   linearWorldPoints,
   newDraw,
   newImage,
@@ -58,9 +59,9 @@ import {
   type BoardData,
   type CanvasSettings,
 } from "./serialize";
-import { loadBoard, loadPrefs, saveBoard, savePrefs } from "./storage";
+import { loadBoard, loadPrefs, loadViewport, saveBoard, savePrefs, saveViewport } from "./storage";
 import { buildScene, isTemplateId, type TemplateId } from "./templates";
-import { loadBoardFonts, measureText } from "./text";
+import { loadBoardFonts } from "./text";
 import {
   boxFromBounds,
   boxFromElement,
@@ -164,6 +165,28 @@ type Interaction =
   | { kind: "laser" }
   | { kind: "erase"; hits: Set<string>; last: Vec };
 
+/** Size a shape gets when placed with a click instead of a drag. */
+const DEFAULT_SIZES: Partial<Record<ShapeTool, [number, number]>> = {
+  sticky: [200, 200],
+  ellipse: [150, 110],
+  diamond: [160, 120],
+  triangle: [150, 130],
+  parallelogram: [180, 100],
+  hexagon: [160, 130],
+  star: [150, 145],
+  cylinder: [120, 150],
+  cloud: [200, 124],
+  bubble: [180, 130],
+  terminator: [180, 70],
+  document: [170, 110],
+  subroutine: [190, 90],
+  manualinput: [180, 100],
+  trapezoid: [180, 100],
+  delay: [170, 90],
+  offpage: [110, 110],
+  actor: [70, 120],
+};
+
 const HANDLE_HIT_MOUSE = 9;
 const HANDLE_HIT_TOUCH = 18;
 const CLICK_SLOP = 4;
@@ -201,6 +224,12 @@ export class Editor {
   private activeLaser: TrailPoint[] | null = null;
   private eraserTrail: TrailPoint[] = [];
   private raf = 0;
+  private notifyFrame = 0;
+  private silentChange = false;
+  private hoverId: string | null = null;
+  private announcedElements: BoardElement[] = this.elements;
+  private savedElements: BoardElement[] | null = null;
+  private savedFiles: FileMap | null = null;
   private saveTimer = 0;
   private toastTimer = 0;
   private internalClipboard: string | null = null;
@@ -240,18 +269,52 @@ export class Editor {
 
   getState = (): EditorState => this.state;
 
-  private setState(patch: Partial<EditorState>): void {
-    this.state = { ...this.state, ...patch };
+  private emit(): void {
+    if (this.notifyFrame) {
+      cancelAnimationFrame(this.notifyFrame);
+      this.notifyFrame = 0;
+    }
+    this.silentChange = false;
     for (const fn of this.listeners) fn();
   }
 
+  /**
+   * `frame` coalesces rapid changes (pan, zoom) into at most one UI update per frame.
+   * `silent` changes state without telling the UI at all; the gesture's end does
+   * that once (box-selecting would otherwise re-render the style panel every frame).
+   */
+  private setState(patch: Partial<EditorState>, mode: "now" | "frame" | "silent" = "now"): void {
+    this.state = { ...this.state, ...patch };
+    if (mode === "now") this.emit();
+    else if (mode === "silent") this.silentChange = true;
+    else if (!this.notifyFrame) {
+      this.notifyFrame = requestAnimationFrame(() => {
+        this.notifyFrame = 0;
+        this.emit();
+      });
+    }
+  }
+
+  /**
+   * Replace the document. During a pointer gesture only the canvas redraws; the
+   * React UI hears about the change once, when the gesture ends. Re-rendering the
+   * panels on every pointer move is what made dragging lag.
+   */
   private setElements(next: BoardElement[], commit = false): void {
     if (next !== this.elements) {
       this.elements = next;
-      this.setState({ sceneVersion: this.state.sceneVersion + 1, isEmpty: next.length === 0 });
       this.requestRender();
     }
+    if (this.interaction.kind === "none") this.announceScene();
     if (commit) this.commit();
+  }
+
+  /** Tell the UI the scene (and any silent state change) moved on. No-op when it is current. */
+  private announceScene(): void {
+    if (this.announcedElements !== this.elements) {
+      this.announcedElements = this.elements;
+      this.setState({ sceneVersion: this.state.sceneVersion + 1, isEmpty: this.elements.length === 0 });
+    } else if (this.silentChange) this.emit();
   }
 
   private commit(): void {
@@ -299,12 +362,17 @@ export class Editor {
       if (saved) {
         this.elements = saved.elements;
         this.files = saved.files;
-        if (saved.viewport) this.setState({ viewport: saved.viewport });
+        const viewport = loadViewport() ?? saved.viewport;
+        if (viewport) this.setState({ viewport });
       }
     } catch {
       this.toast("This browser is blocking storage — use Save to file to keep your board.");
     }
     this.history.reset({ elements: this.elements, files: this.files });
+    // What was just loaded is already on disk; don't write it straight back.
+    this.savedElements = this.elements;
+    this.savedFiles = this.files;
+    this.announcedElements = this.elements;
     this.setState({ ready: true, sceneVersion: this.state.sceneVersion + 1, isEmpty: this.elements.length === 0 });
     this.requestRender();
     await this.handleUrl();
@@ -373,6 +441,7 @@ export class Editor {
       on(canvas, "wheel", this.onWheel, opts),
       on(canvas, "pointerleave", () => {
         if (this.interaction.kind === "none") this.lastWorld = null;
+        this.setHover(null);
       }),
       on(container, "dragover", (e: DragEvent) => {
         if (e.dataTransfer?.types.includes("Files")) e.preventDefault();
@@ -482,6 +551,7 @@ export class Editor {
             }
           : null,
       bindTarget: this.bindTarget,
+      hover: null,
       drawing: this.drawing,
       laserTrails: this.laserTrails,
       eraserTrail: this.eraserTrail,
@@ -494,11 +564,17 @@ export class Editor {
       this.interaction.kind === "linear-multi";
     if (!hideFrame) {
       const frame = this.selectionFrame(selected);
+      // While dragging, the frame follows the selection but its handles step aside.
+      const dragging = this.interaction.kind === "move" && this.interaction.moved;
       if (frame) {
         overlay.frame = frame.box;
-        overlay.handles = frame.handles;
+        if (!dragging) overlay.handles = frame.handles;
       }
-      if (selected.length === 1 && isLinear(selected[0])) overlay.linearEdit = selected[0];
+      if (selected.length === 1 && isLinear(selected[0]) && !dragging) overlay.linearEdit = selected[0];
+    }
+    // What a click would grab: a light outline under the pointer.
+    if (this.hoverId && this.interaction.kind === "none" && this.state.tool === "select" && !this.state.editing) {
+      overlay.hover = this.elements.find((el) => el.id === this.hoverId) ?? null;
     }
     renderOverlay(ctx, overlay, scene);
 
@@ -548,7 +624,7 @@ export class Editor {
   // ─── Viewport ────────────────────────────────────────────────────────────
 
   private setViewport(v: Viewport): void {
-    this.setState({ viewport: v });
+    this.setState({ viewport: v }, "frame");
     this.requestRender();
     this.scheduleSave();
   }
@@ -599,7 +675,7 @@ export class Editor {
       return;
     }
     const patch: Partial<EditorState> = { tool };
-    if (tool === "rectangle" || tool === "diamond" || tool === "ellipse" || tool === "triangle") patch.lastShape = tool;
+    if (isShapeType(tool)) patch.lastShape = tool;
     if (tool === "arrow" || tool === "line") patch.lastLinear = tool;
     if (tool === "pen" || tool === "highlighter" || tool === "laser") patch.lastDraw = tool;
     if (tool !== "select") patch.selectedIds = [];
@@ -638,7 +714,10 @@ export class Editor {
   }
 
   private select(ids: string[]): void {
-    this.setState({ selectedIds: ids });
+    const cur = this.state.selectedIds;
+    if (ids.length === cur.length && ids.every((id, i) => id === cur[i])) return;
+    // A marquee re-selects on every move: the canvas shows it live, the panel catches up on release.
+    this.setState({ selectedIds: ids }, this.interaction.kind === "marquee" ? "silent" : "now");
     this.requestRender();
   }
 
@@ -668,8 +747,10 @@ export class Editor {
   // ─── Pointer input ───────────────────────────────────────────────────────
 
   private onPointerDown = (e: PointerEvent): void => {
-    if (!this.canvas) return;
+    // Until the saved board has loaded, a stroke would be overwritten by it.
+    if (!this.canvas || !this.state.ready) return;
     this.pointerType = e.pointerType;
+    this.setHover(null);
     const sp = this.screenPoint(e);
     this.pointers.set(e.pointerId, sp);
     try {
@@ -707,24 +788,25 @@ export class Editor {
       return;
     }
 
-    switch (this.state.tool) {
+    // Every shape tool (from SHAPE_TYPES) plus sticky notes — never a hand-kept list,
+    // which is how the six newer shapes silently did nothing on the canvas.
+    const tool = this.state.tool;
+    if (isShapeType(tool) || tool === "sticky") {
+      this.startCreateShape(tool, world);
+      return;
+    }
+
+    switch (tool) {
       case "select":
         this.selectDown(e, sp, world);
         break;
-      case "rectangle":
-      case "diamond":
-      case "ellipse":
-      case "triangle":
-      case "sticky":
-        this.startCreateShape(this.state.tool, world);
-        break;
       case "arrow":
       case "line":
-        this.startCreateLinear(this.state.tool, world);
+        this.startCreateLinear(tool, world);
         break;
       case "pen":
       case "highlighter":
-        this.startDraw(this.state.tool, world, e);
+        this.startDraw(tool, world, e);
         break;
       case "laser":
         this.interaction = { kind: "laser" };
@@ -873,6 +955,8 @@ export class Editor {
         break;
     }
     this.gestureStart = null;
+    // The gesture is over: let the UI catch up with the scene once.
+    this.announceScene();
   };
 
   private onPointerCancel = (e: PointerEvent): void => {
@@ -891,6 +975,7 @@ export class Editor {
     if (this.interaction.kind === "linear-multi") this.setState({ multiPoint: false });
     if (this.interaction.kind === "laser") this.activeLaser = null;
     this.interaction = { kind: "none" };
+    this.announceScene();
     this.requestRender();
   }
 
@@ -969,12 +1054,24 @@ export class Editor {
   }
 
   private updateHoverCursor(sp: Vec, world: Vec): void {
-    const lh = this.linearHandleAt(sp);
-    if (lh) return this.updateCursor("pointer");
-    const h = this.handleAt(sp);
-    if (h) return this.updateCursor(handleCursor(h.id, h.angle));
-    const hit = getElementAtPoint(this.elements, world[0], world[1], this.tolerance());
-    this.updateCursor(hit ? "move" : undefined);
+    let hover: string | null = null;
+    if (this.linearHandleAt(sp)) this.updateCursor("pointer");
+    else {
+      const h = this.handleAt(sp);
+      if (h) this.updateCursor(handleCursor(h.id, h.angle));
+      else {
+        const hit = getElementAtPoint(this.elements, world[0], world[1], this.tolerance());
+        this.updateCursor(hit ? "move" : undefined);
+        if (hit && !this.state.selectedIds.includes(hit.id)) hover = hit.id;
+      }
+    }
+    this.setHover(hover);
+  }
+
+  private setHover(id: string | null): void {
+    if (id === this.hoverId) return;
+    this.hoverId = id;
+    this.requestRender();
   }
 
   private selectDown(e: PointerEvent, sp: Vec, world: Vec): void {
@@ -1214,8 +1311,7 @@ export class Editor {
     const z = this.state.viewport.zoom;
     if (el.width * z < 6 && el.height * z < 6) {
       // A click (or tap) places a shape at a sensible default size.
-      const [w, h] =
-        it.tool === "sticky" ? [200, 200] : it.tool === "ellipse" ? [150, 110] : it.tool === "diamond" ? [160, 120] : it.tool === "triangle" ? [150, 130] : [170, 110];
+      const [w, h] = DEFAULT_SIZES[it.tool] ?? [170, 110];
       el = { ...el, x: it.start[0] - w / 2, y: it.start[1] - h / 2, width: w, height: h };
     }
     this.setElements(this.replaceElements(new Map([[el.id, el]])), true);
@@ -1438,12 +1534,11 @@ export class Editor {
       };
     }
     if (isShape(el)) {
-      const area = labelArea(el);
-      const measured = measureText(el.label || " ", el.fontFamily, el.fontSize);
-      const lines = Math.max(1, Math.ceil(measured.width / Math.max(area.width, 1)) + el.label.split("\n").length - 1);
-      const height = Math.max(lh, Math.min(lines * lh, el.height));
+      // The same layout the canvas draws with (an actor's name sits under the figure).
+      const area = layoutShapeLabel(el);
+      const height = Math.max(lh, area.height);
       const localLeft = area.cx - area.width / 2;
-      const localTop = area.cy - height / 2;
+      const localTop = el.type === "actor" ? el.height + 6 : area.cy - height / 2;
       const [left, top] = this.worldToScreen(el.x + localLeft, el.y + localTop);
       return {
         ...base,
@@ -2099,18 +2194,29 @@ export class Editor {
 
   private scheduleSave(): void {
     window.clearTimeout(this.saveTimer);
-    this.saveTimer = window.setTimeout(() => this.flushSave(), 500);
+    this.saveTimer = window.setTimeout(() => {
+      // Writing a big board to IndexedDB copies all of it; do that while the page is idle.
+      if (typeof requestIdleCallback === "function") requestIdleCallback(() => this.flushSave(), { timeout: 2000 });
+      else this.flushSave();
+    }, 600);
   }
 
   private flushSave(): void {
     if (!this.state.ready) return;
     window.clearTimeout(this.saveTimer);
+    saveViewport(this.state.viewport);
+    // Panning and zooming only move the viewport; the board itself is rewritten only when it changed.
+    if (this.savedElements === this.elements && this.savedFiles === this.files) return;
+    this.savedElements = this.elements;
+    this.savedFiles = this.files;
     saveBoard({
       elements: this.elements,
       files: usedFiles(this.elements, this.files),
       viewport: this.state.viewport,
       savedAt: Date.now(),
-    }).catch(() => undefined);
+    }).catch(() => {
+      this.savedElements = null;
+    });
   }
 
   private savePrefsNow(): void {

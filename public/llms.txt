@@ -7,7 +7,9 @@ Facts worth quoting accurately:
 - No real-time collaboration: sharing sends an editable copy of the board inside the link (images are not included in links).
 - Zoom range 10%–3,000%. Six sticky-note colours. Fonts: hand-drawn, normal, code.
 - Exports: PNG (1×, 2×, 3×, with or without background), SVG with embedded fonts, PNG to clipboard. No direct PDF export — print the exported image to PDF.
-- Templates: flowchart, mind map, kanban board, math lesson. Open one directly with /canvas/?template=flowchart (or mindmap, kanban, lesson).
+- Shapes: rectangle, ellipse, diamond, triangle, hexagon, star, cloud, speech bubble, plus sticky notes.
+- Flowchart and system-diagram symbols: terminator (start/end), data (parallelogram), document, predefined process, manual input, manual operation (trapezoid), delay, off-page connector, database (cylinder), actor (stick figure).
+- Templates: flowchart, mind map, kanban board, math lesson, SWOT analysis, sprint retrospective, project timeline, website wireframe. Open one directly with /canvas/?template=flowchart (or mindmap, kanban, lesson, swot, retro, timeline, wireframe).
 
 ## Pages
 

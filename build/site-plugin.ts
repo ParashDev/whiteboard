@@ -280,7 +280,9 @@ function jsonLd(html: string, path: string, cfg: PageConfig): string {
     screenshot: `${ORIGIN}/og.png`,
     featureList: [
       "Infinite canvas with zoom and pan",
-      "Hand-drawn shapes: rectangle, diamond, ellipse, triangle",
+      "Hand-drawn shapes: rectangle, ellipse, diamond, triangle, hexagon, star, cloud, speech bubble",
+      "Flowchart and system-diagram symbols: terminator, data (parallelogram), document, predefined process, manual input, manual operation, delay, off-page connector, database (cylinder), actor",
+      "Templates: flowchart, mind map, kanban board, math lesson, SWOT analysis, sprint retrospective, project timeline, website wireframe",
       "Sticky notes",
       "Arrows that stay attached to shapes",
       "Pen with pressure support, highlighter and laser pointer",

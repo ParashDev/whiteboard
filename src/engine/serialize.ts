@@ -4,7 +4,7 @@
 // malformed or hostile file can never put unexpected values into the scene.
 
 import { DEFAULT_STYLES } from "./constants";
-import { normalizeDraw, normalizeLinear } from "./elements";
+import { SHAPE_TYPES, normalizeDraw, normalizeLinear } from "./elements";
 import { round } from "./math";
 import type {
   Arrowhead,
@@ -44,10 +44,7 @@ export interface BoardData {
 }
 
 const ELEMENT_TYPES: ElementType[] = [
-  "rectangle",
-  "diamond",
-  "ellipse",
-  "triangle",
+  ...SHAPE_TYPES,
   "sticky",
   "arrow",
   "line",

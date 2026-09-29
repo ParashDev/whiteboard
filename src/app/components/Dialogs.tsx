@@ -1,12 +1,14 @@
-import { memo, useEffect, useMemo, useState } from "react";
-import { Check, ClipboardCopy, Copy, Download, TriangleAlert } from "lucide-react";
-import { getCommonBounds } from "../../engine/elements";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { Check, ClipboardCopy, Copy, Download, Plus, TriangleAlert } from "lucide-react";
+import { paintPreview } from "../../engine/preview";
+import { ImageStore } from "../../engine/render";
+import { usedFiles } from "../../engine/serialize";
+import type { BoardElement } from "../../engine/types";
 import {
   clipboardImagesSupported,
   copyPngToClipboard,
   downloadBlob,
   exportPngBlob,
-  exportToCanvas,
   exportToSvg,
   type ExportOptions,
 } from "../../engine/export";
@@ -74,9 +76,16 @@ function Switch({ checked, onChange, label }: { checked: boolean; onChange: (v: 
   );
 }
 
+// Dialogs mount their body only while open. A closed dialog must not subscribe
+// to the scene: it would re-render on every pointer move, and an effect that
+// sets state there trips React's nested-update limit mid-drag.
 const ExportDialog = memo(function ExportDialog() {
-  const editor = useEditor();
   const open = useEditorState((s) => s.dialog === "export");
+  return open ? <ExportDialogBody /> : null;
+});
+
+function ExportDialogBody() {
+  const editor = useEditor();
   const selectedCount = useEditorState((s) => s.selectedIds.length);
   const background = useEditorState((s) => s.canvas.background);
   const sceneVersion = useEditorState((s) => s.sceneVersion);
@@ -84,8 +93,9 @@ const ExportDialog = memo(function ExportDialog() {
   const [scale, setScale] = useState(2);
   const [withBackground, setWithBackground] = useState(true);
   const [onlySelected, setOnlySelected] = useState(false);
-  const [preview, setPreview] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const previewRef = useRef<HTMLCanvasElement>(null);
+  const images = useMemo(() => new ImageStore(), []);
 
   const elements = useMemo(() => {
     void sceneVersion;
@@ -99,23 +109,26 @@ const ExportDialog = memo(function ExportDialog() {
     scale: s,
   });
 
+  // The preview is drawn straight into a canvas at its display size — no full-size
+  // render and no PNG encoding, which is what made opening this dialog stall.
   useEffect(() => {
-    if (!open || !elements.length) {
-      setPreview(null);
-      return;
-    }
+    const canvas = previewRef.current;
+    if (!canvas || !elements.length) return;
+    const bg = withBackground ? background : null;
+    const paint = () =>
+      paintPreview(canvas, elements, { pad: 24, pattern: "plain", maxZoom: 2, background: bg, files: editor.files, images });
+    paint();
     let cancelled = false;
-    const b = getCommonBounds(elements);
-    const s = Math.min(2, 880 / (b.maxX - b.minX + 48), 480 / (b.maxY - b.minY + 48));
-    exportToCanvas({ elements, files: editor.files, background: withBackground ? background : null, scale: s })
-      .then((c) => {
-        if (!cancelled) setPreview(c.toDataURL("image/png"));
-      })
-      .catch(() => setPreview(null));
+    void images.ensure(usedFiles(elements, editor.files)).then(() => {
+      if (!cancelled) paint();
+    });
+    const ro = new ResizeObserver(paint);
+    ro.observe(canvas);
     return () => {
       cancelled = true;
+      ro.disconnect();
     };
-  }, [open, elements, editor, withBackground, background]);
+  }, [elements, editor, withBackground, background, images]);
 
   const name = `whiteboard-${stamp()}`;
   const download = async () => {
@@ -142,18 +155,18 @@ const ExportDialog = memo(function ExportDialog() {
 
   const empty = elements.length === 0;
   return (
-    <Modal open={open} onClose={editor.closeDialog} title="Export image" width={620}>
+    <Modal open onClose={editor.closeDialog} title="Export image" width={620}>
       <div
         className={cx(
-          "grid h-[230px] place-items-center overflow-hidden rounded-xl ring-1 ring-line ring-inset wide:h-[280px]",
+          "relative grid h-[230px] place-items-center overflow-hidden rounded-xl ring-1 ring-line wide:h-[280px]",
           withBackground ? "bg-well" : "checker",
         )}
       >
         {empty ? (
           <span className="text-[13px] text-muted">Nothing to export yet.</span>
-        ) : preview ? (
-          <img src={preview} alt="Preview of the exported whiteboard image" className="max-h-full max-w-full object-contain p-3" />
-        ) : null}
+        ) : (
+          <canvas ref={previewRef} role="img" aria-label="Preview of the exported whiteboard image" className="absolute inset-0 size-full" />
+        )}
       </div>
       <div className="mt-4 grid gap-3 wide:grid-cols-2 wide:gap-x-6">
         <div className="flex items-center justify-between gap-3">
@@ -190,20 +203,19 @@ const ExportDialog = memo(function ExportDialog() {
       </div>
     </Modal>
   );
-});
+}
 
 const ShareDialog = memo(function ShareDialog() {
-  const editor = useEditor();
   const open = useEditorState((s) => s.dialog === "share");
+  return open ? <ShareDialogBody /> : null;
+});
+
+function ShareDialogBody() {
+  const editor = useEditor();
   const [result, setResult] = useState<{ url: string; droppedImages: number } | { error: string } | null>(null);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    if (!open) {
-      setResult(null);
-      setCopied(false);
-      return;
-    }
     let cancelled = false;
     editor
       .createShareLink()
@@ -212,7 +224,7 @@ const ShareDialog = memo(function ShareDialog() {
     return () => {
       cancelled = true;
     };
-  }, [open, editor]);
+  }, [editor]);
 
   const copy = async (url: string) => {
     try {
@@ -224,7 +236,7 @@ const ShareDialog = memo(function ShareDialog() {
   };
 
   return (
-    <Modal open={open} onClose={editor.closeDialog} title="Share a copy of this board" width={480}>
+    <Modal open onClose={editor.closeDialog} title="Share a copy of this board" width={480}>
       <p className="text-[13.5px] text-muted">The board travels inside the link — nothing is uploaded.</p>
       {!result && <div className="mt-4 h-10 animate-pulse rounded-lg bg-well" />}
       {result && "error" in result && (
@@ -257,7 +269,7 @@ const ShareDialog = memo(function ShareDialog() {
       )}
     </Modal>
   );
-});
+}
 
 const ShortcutsDialog = memo(function ShortcutsDialog() {
   const editor = useEditor();
@@ -287,53 +299,63 @@ const ShortcutsDialog = memo(function ShortcutsDialog() {
   );
 });
 
-const previewCache = new Map<TemplateId, string>();
+// Built once per session: a template's elements never change.
+const sceneCache = new Map<TemplateId, BoardElement[]>();
 
-function TemplatePreview({ id, name }: { id: TemplateId; name: string }) {
-  const [src, setSrc] = useState(() => previewCache.get(id) ?? null);
+/** The template itself, painted by the board renderer into a canvas that fills its card. */
+function TemplatePreview({ id, label, order }: { id: TemplateId; label: string; order: number }) {
+  const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
-    if (src) return;
-    let cancelled = false;
-    const elements = buildScene(id);
-    const b = getCommonBounds(elements);
-    const s = Math.min(1, 560 / (b.maxX - b.minX + 48), 360 / (b.maxY - b.minY + 48));
-    exportToCanvas({ elements, files: {}, background: "#ffffff", scale: s })
-      .then((c) => {
-        const url = c.toDataURL("image/png");
-        previewCache.set(id, url);
-        if (!cancelled) setSrc(url);
-      })
-      .catch(() => undefined);
+    const canvas = ref.current;
+    if (!canvas) return;
+    let ro: ResizeObserver | null = null;
+    // One preview per frame, so opening the dialog never blocks on all four at once.
+    const timer = window.setTimeout(() => {
+      let scene = sceneCache.get(id);
+      if (!scene) {
+        scene = buildScene(id);
+        sceneCache.set(id, scene);
+      }
+      const elements = scene;
+      const paint = () => paintPreview(canvas, elements, { pad: 22, maxZoom: 1 });
+      paint();
+      ro = new ResizeObserver(paint);
+      ro.observe(canvas);
+    }, 16 + order * 34);
     return () => {
-      cancelled = true;
+      window.clearTimeout(timer);
+      ro?.disconnect();
     };
-  }, [id, src]);
-  return src ? (
-    <img src={src} alt={`${name} whiteboard template`} className="max-h-full max-w-full object-contain p-3" />
-  ) : (
-    <span className="size-full animate-pulse bg-well" />
-  );
+  }, [id, order]);
+  return <canvas ref={ref} role="img" aria-label={label} className="absolute inset-0 size-full" />;
 }
 
 const TemplatesDialog = memo(function TemplatesDialog() {
   const editor = useEditor();
   const open = useEditorState((s) => s.dialog === "templates");
   return (
-    <Modal open={open} onClose={editor.closeDialog} title="Start from a template" width={720}>
-      <div className="grid grid-cols-1 gap-3 min-[30rem]:grid-cols-2">
-        {TEMPLATES.map((t) => (
+    <Modal open={open} onClose={editor.closeDialog} title="Start from a template" width={760}>
+      <p className="-mt-1 mb-4 text-[13px] text-muted">Added beside anything already on your board.</p>
+      <div className="grid grid-cols-1 gap-4 min-[34rem]:grid-cols-2">
+        {TEMPLATES.map((t, i) => (
           <button
             key={t.id}
             type="button"
             onClick={() => editor.insertTemplate(t.id)}
-            className="focus-ring group flex flex-col overflow-hidden rounded-xl text-left ring-1 ring-line ring-inset transition-shadow duration-150 hover:shadow-island"
+            className="focus-ring group flex flex-col overflow-hidden rounded-xl bg-white text-left ring-1 ring-line transition-[box-shadow] duration-150 hover:ring-active-line"
           >
-            <span className="grid h-[150px] place-items-center bg-white">
-              <TemplatePreview id={t.id} name={t.name} />
+            <span className="relative block aspect-[16/10] w-full overflow-hidden">
+              <TemplatePreview id={t.id} order={i} label={`${t.name} template preview`} />
             </span>
-            <span className="flex items-center justify-between border-t border-line px-3.5 py-2.5 text-[13.5px] font-medium">
-              {t.name}
-              <span className="text-[12px] font-normal text-muted group-hover:text-active-ink">Insert</span>
+            <span className="flex items-center gap-3 border-t border-line bg-island px-4 py-3">
+              <span className="min-w-0 flex-1">
+                <span className="block text-[14px] font-semibold text-ink">{t.name}</span>
+                <span className="block truncate text-[12.5px] text-muted">{t.description}</span>
+              </span>
+              <span className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-3 text-[12.5px] font-medium text-ink ring-1 ring-line ring-inset transition-colors duration-100 group-hover:bg-accent group-hover:text-accent-ink group-hover:ring-accent">
+                <Plus size={14} strokeWidth={2} />
+                Insert
+              </span>
             </span>
           </button>
         ))}

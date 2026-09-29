@@ -83,10 +83,39 @@ export function isLinear(el: BoardElement): el is LinearElement {
   return el.type === "arrow" || el.type === "line";
 }
 
+/** General-purpose shapes, in menu order. */
+export const BASIC_SHAPES: readonly ShapeType[] = ["rectangle", "ellipse", "diamond", "triangle", "hexagon", "star", "cloud", "bubble"];
+
+/** Flowchart symbols and system-diagram pieces, in menu order. */
+export const DIAGRAM_SHAPES: readonly ShapeType[] = [
+  "terminator",
+  "parallelogram",
+  "document",
+  "subroutine",
+  "manualinput",
+  "trapezoid",
+  "delay",
+  "offpage",
+  "cylinder",
+  "actor",
+];
+
+/** Every drawable shape tool. */
+export const SHAPE_TYPES: readonly ShapeType[] = [...BASIC_SHAPES, ...DIAGRAM_SHAPES];
+
+const SHAPE_SET = new Set<string>([...SHAPE_TYPES, "sticky"]);
+
+export function isShapeType(type: string): type is ShapeType {
+  return type !== "sticky" && SHAPE_SET.has(type);
+}
+
 export function isShape(el: BoardElement): el is ShapeElement {
-  return (
-    el.type === "rectangle" || el.type === "diamond" || el.type === "ellipse" || el.type === "triangle" || el.type === "sticky"
-  );
+  return SHAPE_SET.has(el.type);
+}
+
+/** Round shapes use the ellipse maths for hit-testing and arrow attachment. */
+export function isRoundShape(el: BoardElement): boolean {
+  return el.type === "ellipse" || el.type === "cloud";
 }
 
 /** Elements an arrow end can attach to. */
@@ -163,8 +192,20 @@ export function normalizeDraw(el: DrawElement): DrawElement {
   };
 }
 
+// Elements are immutable, so an element object's bounds never change: compute once.
+const boundsCache = new WeakMap<BoardElement, Bounds>();
+
 /** Axis-aligned world bounds, including rotation. `pad` grows it for culling. */
 export function getElementBounds(el: BoardElement, pad = 0): Bounds {
+  let b = boundsCache.get(el);
+  if (!b) {
+    b = computeBounds(el);
+    boundsCache.set(el, b);
+  }
+  return pad ? { minX: b.minX - pad, minY: b.minY - pad, maxX: b.maxX + pad, maxY: b.maxY + pad } : { ...b };
+}
+
+function computeBounds(el: BoardElement): Bounds {
   const b = emptyBounds();
   if (isLinear(el)) {
     for (const [px, py] of linearPath(el)) extendBounds(b, el.x + px, el.y + py);
@@ -191,10 +232,6 @@ export function getElementBounds(el: BoardElement, pad = 0): Bounds {
   if (!Number.isFinite(b.minX)) {
     extendBounds(b, el.x, el.y);
   }
-  b.minX -= pad;
-  b.minY -= pad;
-  b.maxX += pad;
-  b.maxY += pad;
   return b;
 }
 
@@ -226,7 +263,83 @@ export function shapePolygon(el: BoardElement): Vec[] {
         [w, h],
         [0, h],
       ];
+    case "parallelogram": {
+      const s = parallelogramSkew(w, h);
+      return [
+        [s, 0],
+        [w, 0],
+        [w - s, h],
+        [0, h],
+      ];
+    }
+    case "hexagon":
+      return [
+        [w * 0.25, 0],
+        [w * 0.75, 0],
+        [w, h / 2],
+        [w * 0.75, h],
+        [w * 0.25, h],
+        [0, h / 2],
+      ];
+    case "star":
+      return starPoints(w, h);
+    case "bubble": {
+      const b = bubbleBodyHeight(h);
+      return [
+        [0, 0],
+        [w, 0],
+        [w, b],
+        [w * 0.36, b],
+        [w * 0.1, h],
+        [w * 0.18, b],
+        [0, b],
+      ];
+    }
+    case "terminator": {
+      const r = stadiumRadius(w, h);
+      return [
+        ...arcPoints(w - r, h / 2, r, h / 2, -Math.PI / 2, Math.PI / 2),
+        ...arcPoints(r, h / 2, r, h / 2, Math.PI / 2, (Math.PI * 3) / 2),
+      ];
+    }
+    case "delay": {
+      const r = delayRadius(w, h);
+      return [[0, 0], ...arcPoints(w - r, h / 2, r, h / 2, -Math.PI / 2, Math.PI / 2), [0, h]];
+    }
+    case "document":
+      return [
+        [0, 0],
+        [w, 0],
+        [w, h * 0.84],
+        [w * 0.5, h * 0.9],
+        [0, h * 0.9],
+      ];
+    case "manualinput":
+      return [
+        [0, h * 0.28],
+        [w, 0],
+        [w, h],
+        [0, h],
+      ];
+    case "trapezoid": {
+      const s = trapezoidInset(w, h);
+      return [
+        [0, 0],
+        [w, 0],
+        [w - s, h],
+        [s, h],
+      ];
+    }
+    case "offpage":
+      return [
+        [0, 0],
+        [w, 0],
+        [w, h * 0.64],
+        [w / 2, h],
+        [0, h * 0.64],
+      ];
     default:
+      // Rectangles, sticky notes, text, images, cylinders, subroutines and actors use their box.
       return [
         [0, 0],
         [w, 0],
@@ -234,6 +347,62 @@ export function shapePolygon(el: BoardElement): Vec[] {
         [0, h],
       ];
   }
+}
+
+export function parallelogramSkew(w: number, h: number): number {
+  return Math.min(w * 0.22, h * 0.6);
+}
+
+/** Radius of the terminator's rounded ends (a pill: fully round ends). */
+export function stadiumRadius(w: number, h: number): number {
+  return Math.min(h / 2, w / 2);
+}
+
+/** Radius of the delay shape's round right side. */
+export function delayRadius(w: number, h: number): number {
+  return Math.min(h / 2, w);
+}
+
+/** Distance of the predefined-process side bars from the edges. */
+export function subroutineInset(w: number): number {
+  return Math.max(6, Math.min(18, w * 0.1));
+}
+
+export function trapezoidInset(w: number, h: number): number {
+  return Math.min(w * 0.2, h * 0.6);
+}
+
+/** Points along an elliptical arc (angles in radians, clockwise from +x). */
+function arcPoints(cx: number, cy: number, rx: number, ry: number, from: number, to: number, steps = 10): Vec[] {
+  const out: Vec[] = [];
+  for (let i = 0; i <= steps; i++) {
+    const a = from + ((to - from) * i) / steps;
+    out.push([cx + Math.cos(a) * rx, cy + Math.sin(a) * ry]);
+  }
+  return out;
+}
+
+/** Half-height of the cylinder's top and bottom ellipses. */
+export function cylinderCap(w: number, h: number): number {
+  return Math.min(h * 0.14, w * 0.22);
+}
+
+/** The speech bubble's body; the tail fills the rest of the height. */
+export function bubbleBodyHeight(h: number): number {
+  return h * 0.8;
+}
+
+/** A five-pointed star stretched to fill the box exactly (top tip at 0, bottom tips at h). */
+export function starPoints(w: number, h: number): Vec[] {
+  const ry = h / (1 + Math.cos(Math.PI / 5));
+  const rx = w / (2 * Math.sin((2 * Math.PI) / 5));
+  const pts: Vec[] = [];
+  for (let i = 0; i < 10; i++) {
+    const a = -Math.PI / 2 + (i * Math.PI) / 5;
+    const r = i % 2 ? 0.45 : 1;
+    pts.push([w / 2 + Math.cos(a) * rx * r, ry + Math.sin(a) * ry * r]);
+  }
+  return pts;
 }
 
 // ─── Labels ─────────────────────────────────────────────────────────────────
@@ -261,32 +430,72 @@ export function labelArea(el: ShapeElement): { cx: number; cy: number; width: nu
       return { cx: w / 2, cy: h / 2, width: Math.max(10, w / 2 - p / 2) };
     case "triangle":
       return { cx: w / 2, cy: h * 0.64, width: Math.max(10, w * 0.5 - p) };
+    case "parallelogram":
+      return { cx: w / 2, cy: h / 2, width: Math.max(10, w - parallelogramSkew(w, h) * 2 - p) };
+    case "hexagon":
+      return { cx: w / 2, cy: h / 2, width: Math.max(10, w * 0.75 - p) };
+    case "star":
+      return { cx: w / 2, cy: (h / (1 + Math.cos(Math.PI / 5))) * 1.04, width: Math.max(10, w * 0.36) };
+    case "cylinder":
+      return { cx: w / 2, cy: h / 2 + cylinderCap(w, h) / 2, width: Math.max(10, w - p * 2) };
+    case "cloud":
+      return { cx: w / 2, cy: h * 0.56, width: Math.max(10, w * 0.6) };
+    case "bubble":
+      return { cx: w / 2, cy: bubbleBodyHeight(h) / 2, width: Math.max(10, w - p * 2) };
+    case "terminator":
+      return { cx: w / 2, cy: h / 2, width: Math.max(10, w - stadiumRadius(w, h) * 0.8 - p) };
+    case "delay": {
+      const r = delayRadius(w, h);
+      return { cx: (w - r * 0.4) / 2, cy: h / 2, width: Math.max(10, w - r * 0.4 - p * 2) };
+    }
+    case "document":
+      return { cx: w / 2, cy: h * 0.43, width: Math.max(10, w - p * 2) };
+    case "subroutine":
+      return { cx: w / 2, cy: h / 2, width: Math.max(10, w - subroutineInset(w) * 2 - p) };
+    case "manualinput":
+      return { cx: w / 2, cy: h * 0.62, width: Math.max(10, w - p * 2) };
+    case "trapezoid":
+      return { cx: w / 2, cy: h / 2, width: Math.max(10, w - trapezoidInset(w, h) * 2 - p) };
+    case "offpage":
+      return { cx: w / 2, cy: h * 0.36, width: Math.max(10, w - p * 2) };
+    case "actor":
+      // The name sits under the figure, like a UML actor; the centre is set per layout.
+      return { cx: w / 2, cy: h, width: Math.max(60, w * 2) };
     default:
       return { cx: w / 2, cy: h / 2, width: Math.max(10, w - p * 2) };
   }
 }
 
+/** How much of a shape's height its label may use (the rest is outline). */
+const LABEL_HEIGHT_SHARE: Partial<Record<ShapeElement["type"], number>> = {
+  ellipse: 1 / Math.SQRT2,
+  diamond: 0.5,
+  triangle: 0.5,
+  hexagon: 0.9,
+  star: 0.34,
+  cylinder: 0.75,
+  cloud: 0.55,
+  bubble: 0.8,
+  document: 0.8,
+  manualinput: 0.7,
+  offpage: 0.6,
+};
+
 export function layoutShapeLabel(el: ShapeElement): LabelLayout {
   const area = labelArea(el);
   const lines = wrapText(el.label, el.fontFamily, el.fontSize, area.width);
   const lineHeight = el.fontSize * LINE_HEIGHT;
-  return { lines, lineHeight, cx: area.cx, cy: area.cy, width: area.width, height: lines.length * lineHeight };
+  const height = lines.length * lineHeight;
+  // An actor's name hangs below the figure instead of inside it.
+  const cy = el.type === "actor" ? el.height + 6 + height / 2 : area.cy;
+  return { lines, lineHeight, cx: area.cx, cy, width: area.width, height };
 }
 
 /** Height a shape needs so its label fits inside it. */
 export function heightForLabel(el: ShapeElement): number {
-  if (!el.label) return el.height;
+  if (!el.label || el.type === "actor") return el.height;
   const { height } = layoutShapeLabel(el);
-  const p = LABEL_PADDING * 2;
-  switch (el.type) {
-    case "ellipse":
-      return (height + p) * Math.SQRT2;
-    case "diamond":
-    case "triangle":
-      return (height + p) * 2;
-    default:
-      return height + p;
-  }
+  return (height + LABEL_PADDING * 2) / (LABEL_HEIGHT_SHARE[el.type] ?? 1);
 }
 
 /** Grow a shape (downwards from its centre) until the label fits. Never shrinks. */

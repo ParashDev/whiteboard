@@ -3,7 +3,7 @@
 // touches. A setting shows when at least one selected element uses it, and a
 // change only lands on the elements that use it.
 
-import { fitShapeToLabel, isShape, remeasureText } from "./elements";
+import { fitShapeToLabel, isShape, isShapeType, remeasureText } from "./elements";
 import type { BoardElement, StyleGroup, StyleProps, Tool } from "./types";
 
 export type PropKey =
@@ -43,12 +43,8 @@ export function styleGroupOf(el: BoardElement): StyleGroup {
 }
 
 export function styleGroupOfTool(tool: Tool): StyleGroup | null {
+  if (isShapeType(tool)) return "shape";
   switch (tool) {
-    case "rectangle":
-    case "diamond":
-    case "ellipse":
-    case "triangle":
-      return "shape";
     case "sticky":
       return "sticky";
     case "arrow":
@@ -68,8 +64,11 @@ export function styleGroupOfTool(tool: Tool): StyleGroup | null {
 
 const TEXT_PROPS: PropKey[] = ["fontFamily", "fontSize", "textAlign"];
 
-/** Settings for an element type's tool before anything is drawn (no label yet). */
-export function propsForGroup(group: StyleGroup, tool?: Tool): PropKey[] {
+/** Shapes with no corners to round. */
+const NO_EDGES = new Set(["ellipse", "cloud", "cylinder", "terminator", "delay", "document", "actor"]);
+
+/** Settings for an element type's tool before anything is drawn (no label yet). `shape` is the tool or element type. */
+export function propsForGroup(group: StyleGroup, shape?: string): PropKey[] {
   switch (group) {
     case "shape":
       return [
@@ -79,7 +78,7 @@ export function propsForGroup(group: StyleGroup, tool?: Tool): PropKey[] {
         "strokeWidth",
         "strokeStyle",
         "roughness",
-        ...(tool === "ellipse" ? [] : (["edges"] as PropKey[])),
+        ...(shape && NO_EDGES.has(shape) ? [] : (["edges"] as PropKey[])),
         "opacity",
       ];
     case "sticky":
@@ -100,7 +99,7 @@ export function propsForGroup(group: StyleGroup, tool?: Tool): PropKey[] {
 /** Settings that apply to one specific element (a labelled shape also gets the font settings). */
 export function propsForElement(el: BoardElement): PropKey[] {
   const group = styleGroupOf(el);
-  const base = propsForGroup(group, el.type === "ellipse" ? "ellipse" : undefined);
+  const base = propsForGroup(group, el.type);
   const labelled = (isShape(el) && el.type !== "sticky" && el.label) || ((el.type === "arrow" || el.type === "line") && el.label);
   return labelled ? [...base.filter((k) => k !== "opacity"), ...TEXT_PROPS, "opacity"] : base;
 }

@@ -2,7 +2,7 @@
 // with the opposite handle pinned; a multi-selection scales uniformly around
 // the pinned side of its bounding box, which is exact for rotated members too.
 
-import { getCenter, isLinear, keepsAspect, normalizeLinear } from "./elements";
+import { getCenter, isLinear, isShape, keepsAspect, normalizeLinear } from "./elements";
 import { rotatePoint } from "./math";
 import type { BoardElement, Bounds, Vec } from "./types";
 
@@ -188,9 +188,7 @@ export function resizeGroup(
     const moved = { x: ncx - w / 2, y: ncy - h / 2, width: w, height: h };
     if (el.type === "text") return { ...el, ...moved, fontSize: Math.max(4, el.fontSize * s) };
     if (el.type === "draw") return { ...el, ...moved, points: el.points.map(([x, y, p]) => [x * s, y * s, p] as [number, number, number]) };
-    if (el.type === "rectangle" || el.type === "diamond" || el.type === "ellipse" || el.type === "triangle" || el.type === "sticky") {
-      return { ...el, ...moved, fontSize: el.label ? Math.max(4, el.fontSize * s) : el.fontSize };
-    }
+    if (isShape(el)) return { ...el, ...moved, fontSize: el.label ? Math.max(4, el.fontSize * s) : el.fontSize };
     return { ...el, ...moved };
   });
 }

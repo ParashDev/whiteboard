@@ -20,8 +20,8 @@ engines read it with no JavaScript.
 | `/how-to-use-online-whiteboard/` | guide | Step-by-step tutorial |
 | `/whiteboard-keyboard-shortcuts/` | guide | Every shortcut |
 
-`/canvas/?template=flowchart|mindmap|kanban|lesson` opens the app with that template placed on
-the board (next to anything already there, never on top of it).
+`/canvas/?template=flowchart|mindmap|kanban|lesson|swot|retro|timeline|wireframe` opens the app
+with that template placed on the board (next to anything already there, never on top of it).
 
 ### How the static pages are assembled
 

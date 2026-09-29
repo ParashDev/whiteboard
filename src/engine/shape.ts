@@ -7,7 +7,16 @@ import rough from "roughjs";
 import type { Drawable, Options } from "roughjs/bin/core";
 import { getStroke } from "perfect-freehand";
 import { freedrawSize } from "./constants";
-import { isLinear, linearPath } from "./elements";
+import {
+  bubbleBodyHeight,
+  cylinderCap,
+  delayRadius,
+  isLinear,
+  linearPath,
+  shapePolygon,
+  stadiumRadius,
+  subroutineInset,
+} from "./elements";
 import type { Arrowhead, DrawElement, LinearElement, ShapeElement, Vec } from "./types";
 
 export interface PaintOp {
@@ -25,17 +34,28 @@ const generator = rough.generator();
 function roughOptions(el: ShapeElement | LinearElement, fill: boolean): Options {
   const dashed = el.strokeStyle === "dashed";
   const dotted = el.strokeStyle === "dotted";
+  // Arrows and lines are connectors: one stroke, with ends pinned exactly where
+  // they are, so the shaft meets its arrowhead and the shape it is attached to.
+  // (rough.js's double stroke read as two arrows at the Cartoonist setting.)
+  const connector = el.type === "arrow" || el.type === "line";
   const o: Options = {
     seed: el.seed,
-    roughness: el.roughness === 2 ? 2 : el.roughness,
+    roughness: el.roughness,
     bowing: el.roughness === 0 ? 0 : 1,
     stroke: el.strokeColor,
     strokeWidth: dashed || dotted ? el.strokeWidth + 0.5 : el.strokeWidth,
-    disableMultiStroke: dashed || dotted,
-    preserveVertices: el.roughness < 2,
+    disableMultiStroke: connector || dashed || dotted,
+    preserveVertices: connector || el.roughness < 2,
     fillWeight: el.strokeWidth / 2,
     hachureGap: el.strokeWidth * 4,
   };
+  if (connector && el.roughness > 0) {
+    // With a single stroke, rough.js's default bow is ±2–4 px on a typical arrow —
+    // the three levels looked identical. Connectors get their own, clearly
+    // different amounts: Artist bows gently, Cartoonist bows and wobbles.
+    o.bowing = el.roughness === 1 ? 1.8 : 2.6;
+    o.maxRandomnessOffset = el.roughness === 1 ? 2.8 : 3.6;
+  }
   if (dashed) o.strokeLineDash = [8, 8 + el.strokeWidth];
   if (dotted) o.strokeLineDash = [1.5, 6 + el.strokeWidth];
   if (fill && el.backgroundColor !== "transparent") {
@@ -90,17 +110,26 @@ function toOps(drawable: Drawable): PaintOp[] {
   return ops;
 }
 
-/** A polygon with each corner rounded by a quadratic curve. */
+/**
+ * A polygon with each corner rounded by a quadratic curve. Zero-length edges (a
+ * shape with no width or height yet) are skipped: dividing by their length gave
+ * NaN, which rough.js cannot parse, and that failure blanked the whole canvas.
+ */
 function roundedPolygonPath(points: Vec[], radius: number): string {
-  const n = points.length;
+  const pts = points.filter((p, i) => {
+    const q = points[(i + 1) % points.length];
+    return Math.hypot(q[0] - p[0], q[1] - p[1]) > 1e-6;
+  });
+  const n = pts.length;
+  if (n < 3) return "";
   let d = "";
   for (let i = 0; i < n; i++) {
-    const prev = points[(i - 1 + n) % n];
-    const cur = points[i];
-    const next = points[(i + 1) % n];
+    const prev = pts[(i - 1 + n) % n];
+    const cur = pts[i];
+    const next = pts[(i + 1) % n];
     const lenPrev = Math.hypot(cur[0] - prev[0], cur[1] - prev[1]);
     const lenNext = Math.hypot(next[0] - cur[0], next[1] - cur[1]);
-    const r = Math.min(radius, lenPrev / 2, lenNext / 2);
+    const r = Math.max(0, Math.min(radius, lenPrev / 2, lenNext / 2));
     const a: Vec = [cur[0] + ((prev[0] - cur[0]) / lenPrev) * r, cur[1] + ((prev[1] - cur[1]) / lenPrev) * r];
     const b: Vec = [cur[0] + ((next[0] - cur[0]) / lenNext) * r, cur[1] + ((next[1] - cur[1]) / lenNext) * r];
     d += `${i === 0 ? "M" : "L"}${a[0]} ${a[1]} Q${cur[0]} ${cur[1]} ${b[0]} ${b[1]} `;
@@ -108,9 +137,88 @@ function roundedPolygonPath(points: Vec[], radius: number): string {
   return d + "Z";
 }
 
+const K = 0.5523; // Bézier handle length for a quarter circle
+
+function cylinderBodyPath(w: number, h: number): string {
+  const ry = cylinderCap(w, h);
+  const hw = w / 2;
+  return [
+    `M0 ${ry} L0 ${h - ry}`,
+    `C0 ${h - ry + ry * K} ${hw - hw * K} ${h} ${hw} ${h}`,
+    `C${hw + hw * K} ${h} ${w} ${h - ry + ry * K} ${w} ${h - ry}`,
+    `L${w} ${ry}`,
+    `C${w} ${ry - ry * K} ${hw + hw * K} 0 ${hw} 0`,
+    `C${hw - hw * K} 0 0 ${ry - ry * K} 0 ${ry} Z`,
+  ].join(" ");
+}
+
+/** A cloud drawn in a 100 × 60 design box, stretched to the element. */
+function cloudPath(w: number, h: number): string {
+  const segs: number[][] = [
+    [22, 60],
+    [8, 60, 2, 50, 7, 41],
+    [0, 31, 9, 20, 21, 23],
+    [22, 10, 36, 3, 48, 10],
+    [55, 1, 74, 1, 80, 13],
+    [93, 11, 102, 25, 95, 36],
+    [102, 45, 96, 60, 82, 60],
+  ];
+  const X = (v: number) => Math.round((v / 100) * w * 100) / 100;
+  const Y = (v: number) => Math.round(((v - 3) / 57) * h * 100) / 100;
+  let d = `M${X(segs[0][0])} ${Y(segs[0][1])}`;
+  for (const s of segs.slice(1)) d += ` C${X(s[0])} ${Y(s[1])} ${X(s[2])} ${Y(s[3])} ${X(s[4])} ${Y(s[5])}`;
+  return `${d} Z`;
+}
+
+/** A pill: straight top and bottom, fully round ends (the flowchart start/end symbol). */
+function terminatorPath(w: number, h: number): string {
+  const r = stadiumRadius(w, h);
+  const ry = h / 2;
+  return [
+    `M${r} 0 L${w - r} 0`,
+    `C${w - r + r * K} 0 ${w} ${ry - ry * K} ${w} ${ry}`,
+    `C${w} ${ry + ry * K} ${w - r + r * K} ${h} ${w - r} ${h}`,
+    `L${r} ${h}`,
+    `C${r - r * K} ${h} 0 ${ry + ry * K} 0 ${ry}`,
+    `C0 ${ry - ry * K} ${r - r * K} 0 ${r} 0 Z`,
+  ].join(" ");
+}
+
+/** Flat left side, round right side (the flowchart delay symbol). */
+function delayPath(w: number, h: number): string {
+  const r = delayRadius(w, h);
+  const ry = h / 2;
+  return [
+    `M0 0 L${w - r} 0`,
+    `C${w - r + r * K} 0 ${w} ${ry - ry * K} ${w} ${ry}`,
+    `C${w} ${ry + ry * K} ${w - r + r * K} ${h} ${w - r} ${h}`,
+    `L0 ${h} Z`,
+  ].join(" ");
+}
+
+/** A page with a wavy bottom edge (the flowchart document symbol). */
+function documentPath(w: number, h: number): string {
+  return `M0 0 L${w} 0 L${w} ${h * 0.84} C${w * 0.62} ${h * 0.66} ${w * 0.38} ${h * 1.1} 0 ${h * 0.88} Z`;
+}
+
+/** Rounded (or square) body with a sharp tail at the bottom left. */
+function bubblePath(w: number, h: number, round: boolean): string {
+  const b = bubbleBodyHeight(h);
+  const r = round ? Math.min(16, w * 0.1, b * 0.25) : 0;
+  return [
+    `M${r} 0 L${w - r} 0 Q${w} 0 ${w} ${r}`,
+    `L${w} ${b - r} Q${w} ${b} ${w - r} ${b}`,
+    `L${w * 0.36} ${b} L${w * 0.1} ${h} L${w * 0.18} ${b}`,
+    `L${r} ${b} Q0 ${b} 0 ${b - r}`,
+    `L0 ${r} Q0 0 ${r} 0 Z`,
+  ].join(" ");
+}
+
 function shapeOps(el: ShapeElement): PaintOp[] {
   const w = el.width;
   const h = el.height;
+  // The first frame of a drag has no size yet; there is nothing to draw.
+  if (!(w >= 1 && h >= 1)) return [];
   const o = roughOptions(el, true);
   let drawable: Drawable;
   switch (el.type) {
@@ -142,6 +250,62 @@ function shapeOps(el: ShapeElement): PaintOp[] {
           : generator.polygon(pts, o);
       break;
     }
+    case "parallelogram":
+    case "hexagon":
+    case "star":
+    case "manualinput":
+    case "trapezoid":
+    case "offpage": {
+      const pts = shapePolygon(el);
+      const radius = Math.min(w, h) * (el.type === "star" ? 0.035 : 0.08);
+      drawable = el.edges === "round" ? generator.path(roundedPolygonPath(pts, radius), o) : generator.polygon(pts, o);
+      break;
+    }
+    case "terminator":
+      drawable = generator.path(terminatorPath(w, h), o);
+      break;
+    case "delay":
+      drawable = generator.path(delayPath(w, h), o);
+      break;
+    case "document":
+      drawable = generator.path(documentPath(w, h), o);
+      break;
+    case "subroutine": {
+      // A process box with a bar down each side.
+      const inset = subroutineInset(w);
+      const box = el.edges === "round" ? generator.path(roundedPolygonPath(shapePolygon(el), Math.min(12, Math.min(w, h) * 0.12)), o) : generator.rectangle(0, 0, w, h, o);
+      const bar = { ...o, fill: undefined };
+      return [...toOps(box), ...toOps(generator.line(inset, 0, inset, h, bar)), ...toOps(generator.line(w - inset, 0, w - inset, h, bar))];
+    }
+    case "actor": {
+      // A stick figure: the head takes the fill, the body is lines.
+      const d = Math.min(w * 0.5, h * 0.26);
+      const line = { ...o, fill: undefined };
+      return [
+        ...toOps(generator.circle(w / 2, d / 2, d, o)),
+        ...toOps(generator.line(w / 2, d, w / 2, h * 0.64, line)),
+        ...toOps(generator.line(w * 0.08, h * 0.38, w * 0.92, h * 0.38, line)),
+        ...toOps(
+          generator.linearPath(
+            [
+              [w * 0.12, h],
+              [w / 2, h * 0.64],
+              [w * 0.88, h],
+            ],
+            line,
+          ),
+        ),
+      ];
+    }
+    case "bubble":
+      drawable = generator.path(bubblePath(w, h, el.edges === "round"), o);
+      break;
+    case "cloud":
+      drawable = generator.path(cloudPath(w, h), o);
+      break;
+    case "cylinder":
+      // The body (sides, bottom curve, back of the rim), then the rim drawn over it.
+      return [...toOps(generator.path(cylinderBodyPath(w, h), o)), ...toOps(generator.ellipse(w / 2, cylinderCap(w, h), w, cylinderCap(w, h) * 2, o))];
     default: {
       if (el.edges === "round") {
         const r = Math.min(24, Math.min(w, h) * 0.25);
@@ -168,7 +332,8 @@ function arrowheadOps(el: LinearElement, tip: Vec, from: Vec, head: Arrowhead): 
   const angle = Math.atan2(tip[1] - from[1], tip[0] - from[0]);
   const segLen = Math.hypot(tip[0] - from[0], tip[1] - from[1]);
   const size = Math.min(10 + el.strokeWidth * 4, Math.max(8, segLen * 0.5));
-  const o: Options = { ...roughOptions(el, false), strokeLineDash: undefined, disableMultiStroke: false };
+  // Heads are always solid, single-stroke and a little calmer than the shaft, so they stay crisp.
+  const o: Options = { ...roughOptions(el, false), strokeLineDash: undefined, roughness: Math.min(el.roughness, 1) };
   const at = (a: number, len: number): Vec => [tip[0] - Math.cos(a) * len, tip[1] - Math.sin(a) * len];
   switch (head) {
     case "arrow": {
