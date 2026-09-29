@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <!--site:page {"kind": "app", "crumb": "Whiteboard canvas"}-->
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
+    <title>Online Whiteboard Canvas — Draw Free, No Sign-Up</title>
+    <meta
+      name="description"
+      content="Start drawing on a free online whiteboard: infinite canvas, shapes, sticky notes, arrows, pen, text and images. Export PNG or SVG. No account needed."
+    />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <link rel="canonical" href="https://whiteboard.dplooy.com/canvas/" />
+    <meta name="theme-color" content="#ffffff" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Whiteboard by Dplooy" />
+    <meta property="og:title" content="Online Whiteboard Canvas — Draw Free, No Sign-Up" />
+    <meta property="og:description" content="An infinite canvas with shapes, sticky notes, arrows, pen and text. Free, no account, nothing uploaded." />
+    <meta property="og:url" content="https://whiteboard.dplooy.com/canvas/" />
+    <meta property="og:image" content="https://whiteboard.dplooy.com/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Free online whiteboard with hand-drawn shapes, arrows and sticky notes" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Online Whiteboard Canvas — Draw Free, No Sign-Up" />
+    <meta name="twitter:description" content="An infinite canvas with shapes, sticky notes, arrows, pen and text. Free, no account." />
+    <meta name="twitter:image" content="https://whiteboard.dplooy.com/og.png" />
+    <!--site:head-->
+    <script>
+      // Apply the stored theme before first paint so dark mode never flashes white.
+      try {
+        if (localStorage.getItem("whiteboard:theme") === "dark") document.documentElement.dataset.theme = "dark";
+      } catch (e) {}
+    </script>
+    <!--site:jsonld-->
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript>
+      <main style="font-family: system-ui, sans-serif; max-width: 640px; margin: 64px auto; padding: 0 20px; line-height: 1.6">
+        <h1>Online whiteboard</h1>
+        <p>
+          This free online whiteboard needs JavaScript to draw. Turn JavaScript on and reload, or read
+          <a href="/how-to-use-online-whiteboard/">how to use the online whiteboard</a>.
+        </p>
+      </main>
+    </noscript>
+    <script type="module" src="/src/app/main.tsx"></script>
+  </body>
+</html>

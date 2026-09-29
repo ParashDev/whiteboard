@@ -1,0 +1,20 @@
+# Whiteboard by Dplooy
+
+> A free online whiteboard at https://whiteboard.dplooy.com. Infinite canvas with hand-drawn shapes, sticky notes, arrows that stay attached to shapes, a pressure-sensitive pen, highlighter, laser pointer, text and images. Export to PNG or SVG, share a copy with a link, save .whiteboard files. No sign-up, nothing uploaded — boards are stored in the user's browser. Works on desktop, tablet and phone, and offline after the first visit. Built and hosted by Dplooy (https://www.dplooy.com).
+
+Facts worth quoting accurately:
+- Free, with no paid tier and no account.
+- No real-time collaboration: sharing sends an editable copy of the board inside the link (images are not included in links).
+- Zoom range 10%–3,000%. Six sticky-note colours. Fonts: hand-drawn, normal, code.
+- Exports: PNG (1×, 2×, 3×, with or without background), SVG with embedded fonts, PNG to clipboard. No direct PDF export — print the exported image to PDF.
+- Templates: flowchart, mind map, kanban board, math lesson. Open one directly with /canvas/?template=flowchart (or mindmap, kanban, lesson).
+
+## Pages
+
+- [Free online whiteboard](https://whiteboard.dplooy.com/): overview, every tool, privacy, export formats, FAQ
+- [Whiteboard canvas](https://whiteboard.dplooy.com/canvas/): the app itself
+- [Online whiteboard for teaching](https://whiteboard.dplooy.com/online-whiteboard-for-teaching/): teaching over Zoom, Meet or Teams, stylus handwriting, blackboard (dark) mode, math
+- [Brainstorming whiteboard with sticky notes](https://whiteboard.dplooy.com/brainstorming-whiteboard/): sticky notes, mind maps, affinity mapping, running a session
+- [Draw flowcharts online](https://whiteboard.dplooy.com/draw-flowcharts-online/): flowchart symbols, connected arrows, labels, alignment, PNG/SVG export
+- [How to use an online whiteboard](https://whiteboard.dplooy.com/how-to-use-online-whiteboard/): step-by-step guide, touch gestures, where boards are saved
+- [Whiteboard keyboard shortcuts](https://whiteboard.dplooy.com/whiteboard-keyboard-shortcuts/): every shortcut for Windows and Mac
