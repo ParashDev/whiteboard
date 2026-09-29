@@ -3,18 +3,35 @@
 // as the app, so the pictures on the site are the product, not a mock-up.
 
 import { paintPreview } from "../engine/preview";
-import { buildScene, isTemplateId } from "../engine/templates";
+import { buildScene, isTemplateId, type TemplateId } from "../engine/templates";
 import { loadBoardFonts } from "../engine/text";
 import type { BoardElement } from "../engine/types";
 import { registerServiceWorker } from "../shared/sw";
 
-const scenes = new Map<HTMLCanvasElement, BoardElement[]>();
+type SceneId = TemplateId | "hero" | "hero-compact";
+
+const built = new Map<SceneId, BoardElement[]>();
+
+function scene(id: SceneId): BoardElement[] {
+  let els = built.get(id);
+  if (!els) {
+    els = buildScene(id);
+    built.set(id, els);
+  }
+  return els;
+}
+
+/** Which board a canvas shows: the hero swaps to a tall layout on narrow screens so the writing stays legible. */
+function sceneFor(canvas: HTMLCanvasElement): SceneId {
+  const id = canvas.dataset.scene ?? "";
+  if (id === "hero") return canvas.clientWidth < 520 ? "hero-compact" : "hero";
+  return isTemplateId(id) ? id : "hero";
+}
 
 function paint(canvas: HTMLCanvasElement): void {
-  const elements = scenes.get(canvas);
-  if (!elements) return;
-  paintPreview(canvas, elements, {
+  paintPreview(canvas, scene(sceneFor(canvas)), {
     pad: Number(canvas.dataset.pad ?? 28),
+    insetTop: Number(canvas.dataset.insetTop ?? 0),
     pattern: canvas.dataset.pattern === "plain" ? "plain" : "dots",
   });
 }
@@ -32,8 +49,6 @@ async function start(): Promise<void> {
         if (!entry.isIntersecting) continue;
         const canvas = entry.target as HTMLCanvasElement;
         reveal.unobserve(canvas);
-        const id = canvas.dataset.scene ?? "";
-        scenes.set(canvas, buildScene(id === "hero" || !isTemplateId(id) ? "hero" : id));
         paint(canvas);
         resize.observe(canvas);
       }

@@ -14,6 +14,8 @@ export function paintPreview(
   elements: readonly BoardElement[],
   opts: {
     pad?: number;
+    /** Extra room kept clear at the top (e.g. under a toolbar drawn over the picture). */
+    insetTop?: number;
     pattern?: CanvasPattern;
     maxZoom?: number;
     /** Solid page colour, or null for transparent. Defaults to white. */
@@ -32,11 +34,14 @@ export function paintPreview(
   if (!elements.length) return;
   const b = getCommonBounds(elements);
   const pad = opts.pad ?? 28;
-  const zoom = Math.min(w / (b.maxX - b.minX + pad * 2), h / (b.maxY - b.minY + pad * 2), opts.maxZoom ?? 1.15);
+  const top = opts.insetTop ?? 0;
+  // Fit into the area below the inset, centred there.
+  const availH = Math.max(1, h - top);
+  const zoom = Math.min(w / (b.maxX - b.minX + pad * 2), availH / (b.maxY - b.minY + pad * 2), opts.maxZoom ?? 1.15);
   const cx = (b.minX + b.maxX) / 2;
   const cy = (b.minY + b.maxY) / 2;
   renderScene(ctx, elements, {
-    viewport: { x: cx - w / 2 / zoom, y: cy - h / 2 / zoom, zoom },
+    viewport: { x: cx - w / 2 / zoom, y: cy - (top + availH / 2) / zoom, zoom },
     width: w,
     height: h,
     pixelRatio: dpr,

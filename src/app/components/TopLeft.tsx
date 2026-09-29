@@ -1,9 +1,9 @@
 import { memo, useCallback, useRef, useState, type ReactNode } from "react";
 import {
+  ArrowLeft,
   BookOpen,
   Download,
   FolderOpen,
-  House,
   ImageDown,
   Keyboard,
   LayoutTemplate,
@@ -89,6 +89,9 @@ function MainMenu() {
       </IconButton>
       <Popover anchor={ref} open={open} onClose={close} placement="bottom-start" className="thin-scroll max-h-[calc(100dvh-80px)] w-[268px] overflow-y-auto p-1.5" label="Menu">
         <div role="menu" className="flex flex-col">
+          {/* The way out on phones and installed apps, where there may be no browser back button. */}
+          <MenuItem icon={<ArrowLeft {...I} />} label="Back to home" href="/" />
+          <div className="my-1.5 h-px bg-line" />
           <MenuItem icon={<FolderOpen {...I} />} label="Open…" shortcut={["Ctrl", "O"]} onClick={run(editor.openFilePicker)} />
           <MenuItem icon={<Download {...I} />} label="Save to file" shortcut={["Ctrl", "S"]} onClick={run(editor.saveToFile)} />
           <MenuItem icon={<ImageDown {...I} />} label="Export image…" shortcut={["Ctrl", "⇧", "E"]} onClick={run(() => editor.openDialog("export"))} />
@@ -124,7 +127,6 @@ function MainMenu() {
           <div className="my-1.5 h-px bg-line" />
           <MenuItem icon={<Keyboard {...I} />} label="Keyboard shortcuts" shortcut={["?"]} onClick={run(() => editor.openDialog("shortcuts"))} />
           <MenuItem icon={<BookOpen {...I} />} label="How to use the whiteboard" href="/how-to-use-online-whiteboard/" />
-          <MenuItem icon={<House {...I} />} label="About this whiteboard" href="/" />
           <div className="my-1.5 h-px bg-line" />
           <MenuItem icon={<Trash2 {...I} />} label="Clear the board…" danger onClick={run(() => editor.openDialog("reset"))} />
         </div>

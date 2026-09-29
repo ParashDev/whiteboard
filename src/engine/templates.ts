@@ -326,8 +326,25 @@ export const TEMPLATES: { id: TemplateId; name: string; description: string; bui
   { id: "wireframe", name: "Website wireframe", description: "A landing page layout with a review note", build: wireframe },
 ];
 
-export function buildScene(id: TemplateId | "hero"): BoardElement[] {
+/** The same launch plan, re-arranged tall and narrow so it stays readable on a phone. */
+function heroCompact(): BoardElement[] {
+  const b = new Builder();
+  b.stroke(14, 34, 138, 32, "highlighter", HIGHLIGHTER_COLORS[0], 1);
+  b.text(20, 10, "Launch plan", { fontSize: 36 });
+  b.stroke(22, 66, 212, 62, "pen", "#1e1e1e", 2);
+  const idea = b.shape("rectangle", 16, 108, 132, 68, "Idea", { backgroundColor: BLUE });
+  const ready = b.shape("diamond", 206, 94, 176, 100, "Ready?", { backgroundColor: YELLOW });
+  const ship = b.shape("ellipse", 214, 262, 160, 72, "Ship it", { backgroundColor: GREEN });
+  b.connect(idea, ready);
+  b.connect(ready, ship, { label: "yes" });
+  b.sticky(10, 232, "Invite beta users", STICKY_COLORS[0], -0.045, 160, 112);
+  b.sticky(104, 378, "Write the launch post", STICKY_COLORS[1], 0.035, 170, 108);
+  return b.elements;
+}
+
+export function buildScene(id: TemplateId | "hero" | "hero-compact"): BoardElement[] {
   if (id === "hero") return hero();
+  if (id === "hero-compact") return heroCompact();
   return TEMPLATES.find((t) => t.id === id)?.build() ?? [];
 }
 

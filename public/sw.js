@@ -4,7 +4,7 @@
  * cache-first because their names change whenever their content does.
  * Bump VERSION to drop every cached file.
  */
-const VERSION = "whiteboard-v1";
+const VERSION = "whiteboard-v2";
 const SHELL = ["/", "/canvas/", "/manifest.webmanifest", "/favicon.svg"];
 
 const ASSET_RE = /(?:src|href)="(\/assets\/[^"]+)"|url\((\/assets\/[^)]+)\)/g;
@@ -29,7 +29,8 @@ self.addEventListener("install", (event) => {
   event.waitUntil(
     (async () => {
       const cache = await caches.open(VERSION);
-      await cache.addAll(SHELL);
+      // "reload" skips the HTTP cache, so a fresh install never stores a page from the previous deploy.
+      await cache.addAll(SHELL.map((url) => new Request(url, { cache: "reload" })));
       // Precache the app's scripts, styles and fonts so the first visit is enough to work offline.
       const firstLevel = await referencedAssets(cache, ["/", "/canvas/"]);
       await Promise.all(firstLevel.map((u) => cache.add(u).catch(() => undefined)));
@@ -56,8 +57,12 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== location.origin) return;
 
   if (request.mode === "navigate") {
+    // Revalidate the page with the server instead of trusting the browser's HTTP cache:
+    // a page cached from the previous deploy points at build files that no longer exist.
+    // (A navigate-mode Request can't take options, so it is rebuilt from its URL.)
+    const fresh = new Request(request.url, { cache: "no-cache", credentials: "same-origin", redirect: "manual" });
     event.respondWith(
-      fetch(request)
+      fetch(fresh)
         .then((response) => {
           if (response.ok) {
             const copy = response.clone();

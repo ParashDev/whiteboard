@@ -138,6 +138,7 @@ kbd {
 
 .brand {
   display: inline-flex;
+  flex-shrink: 0;
   align-items: center;
   gap: 10px;
   color: var(--ink);
@@ -145,6 +146,7 @@ kbd {
   font-weight: 650;
   font-size: 16.5px;
   letter-spacing: -0.015em;
+  white-space: nowrap;
 }
 
 .brand-by {
@@ -250,11 +252,13 @@ kbd {
   }
 }
 
+/* Scoped to the header so the later `.btn { display: inline-flex }` can't win —
+   that override is what left the button in and cramped the phone header. */
 @media (max-width: 560px) {
-  .header-cta {
+  .site-header .header-cta {
     display: none;
   }
-  .header-cta + .menu {
+  .site-header .header-cta + .menu {
     margin-inline-start: auto;
   }
 }
@@ -417,7 +421,54 @@ h1 .line2 {
 }
 
 .facts svg {
+  flex-shrink: 0;
   color: var(--accent);
+}
+
+/* Phone hero: tighter top, a calmer lede, full-width buttons, facts in a 2 × 2 grid. */
+@media (max-width: 560px) {
+  .hero {
+    padding-block: 32px 64px;
+  }
+  .hero-grid {
+    gap: 36px;
+  }
+  .hero h1 {
+    text-align: center;
+  }
+  h1 .line2 {
+    margin-top: 12px;
+  }
+  .hero .lede {
+    margin-inline: auto;
+    text-align: center;
+  }
+  .lede {
+    margin-top: 18px;
+    font-size: 17px;
+  }
+  .actions {
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 26px;
+  }
+  .actions .btn {
+    width: 100%;
+  }
+  .facts {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 14px;
+    margin-top: 22px;
+    font-size: 14px;
+  }
+  .facts li {
+    align-items: flex-start;
+    justify-content: center;
+  }
+  .facts li svg {
+    margin-top: 3px;
+  }
 }
 
 /* ─── Product frame: a real board inside a replica of the app chrome ─── */
@@ -491,6 +542,13 @@ h1 .line2 {
 .mini-island svg {
   width: 16px;
   height: 16px;
+}
+
+/* Phones get the tall version of the hero board (see src/site/main.ts). */
+@media (max-width: 519px) {
+  .hero-frame canvas {
+    aspect-ratio: 5 / 6;
+  }
 }
 
 @media (max-width: 620px) {
